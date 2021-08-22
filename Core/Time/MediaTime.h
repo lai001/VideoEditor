@@ -19,32 +19,28 @@
 #define FMEDIATIME_H
 
 #include <QString>
-
-extern "C"
-{
-#include <libavutil/rational.h>
-}
+#include "Vendor/FFmpeg.h"
 
 struct FMediaTime
 {
 public:
     FMediaTime();
-    FMediaTime(double seconds, int timeScale);
-    FMediaTime(int timeValue, int timeScale);
-    FMediaTime(AVRational rational);
+    FMediaTime(const double seconds, const int timeScale);
+    FMediaTime(const int timeValue, const int timeScale);
+    FMediaTime(const AVRational rational);
 
 public:
     double seconds() const;
     const AVRational getRational() const;
-    int timeValue();
-    int timeScale();
+    int timeValue() const;
+    int timeScale() const;
 
-    FMediaTime add(FMediaTime time);
-    FMediaTime subtract(FMediaTime time);
-    FMediaTime muliply(FMediaTime time);
-    FMediaTime convertScale(int timeScale);
-    FMediaTime nearer(FMediaTime time0, FMediaTime time1);
-    FMediaTime invert();
+    FMediaTime add(const FMediaTime time) const;
+    FMediaTime subtract(const FMediaTime time) const;
+    FMediaTime muliply(const FMediaTime time) const;
+    FMediaTime convertScale(const int timeScale) const;
+    FMediaTime nearer(const FMediaTime time0, const FMediaTime time1) const;
+    FMediaTime invert() const;
 
     QString debugDescription() const;
 

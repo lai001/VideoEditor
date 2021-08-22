@@ -27,10 +27,7 @@
 #include <QPixmap>
 #include <QAudioOutput>
 
-#include "AudioDecoder.h"
-#include "VideoTrack.h"
-#include "AudioTrack.h"
-#include "Player.h"
+#include "FVideoEditor.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -53,12 +50,7 @@ public:
     QVector<FImageTrack* > imageTracks;
     QVector<FAudioTrack* > audioTracks;
 
-//public:
-//    FAudioDecoder* audioDecoder = nullptr;
-//    QAudioOutput* audioOutput = nullptr;
-//    bool initAudio();
-//    FThread* audioThread = nullptr;
-//    QAudioFormat audioFormat;
+    FVideoProject* project = nullptr;
 
 private:
     void cleanResource();
@@ -75,6 +67,8 @@ private slots:
     void on_horizontalSlider_valueChanged(int value);
 
     void on_actionExport_triggered();
+
+    void on_actionOpenProject_triggered();
 
 private:
     Ui::MainWindow *ui;

@@ -16,9 +16,8 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "Test.h"
-
-#include "VideoDescription.h"
 #include <QtDebug>
+#include "FVideoEditor.h"
 
 Test::Test()
 {
@@ -60,4 +59,17 @@ void Test::case3()
     FMediaTime time1 = FMediaTime(4410, 44100 * 600);
 
     assert(time0 == time1);
+}
+
+void Test::case4()
+{
+    QAudioFormat format;
+    format.setSampleRate(44100);                
+    format.setChannelCount(2);                       
+    format.setSampleSize(sizeof(float) *8);                       
+    format.setCodec("audio/pcm");                   
+    format.setByteOrder(QAudioFormat::LittleEndian); 
+    format.setSampleType(QAudioFormat::Float); 
+
+    FAudioPCMBuffer buffer = FAudioPCMBuffer(format, 44100);
 }

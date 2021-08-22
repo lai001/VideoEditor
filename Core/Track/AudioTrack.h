@@ -37,14 +37,14 @@ public:
 public:
     FMediaTimeMapping timeMapping;
     QString filePath;
-    void prepare(FVideoDescription *videoDescription);
-    void didReloadFrame(FVideoDescription *videoDescription);
+    void prepare(const FVideoDescription& videoDescription);
+    void didReloadFrame(const FVideoDescription& videoDescription);
 
-    void requestCleanCache(FMediaTimeRange timeRange);
+    void requestCleanCache(const FMediaTimeRange& timeRange);
     void requestCleanAllCache();
-    void onSeeking(FMediaTime time);
+    void onSeeking(const FMediaTime& time);
 
-    void samples(FMediaTimeRange timeRange, int byteCount, uint8_t* buffer, QAudioFormat format);
+    void samples(const FMediaTimeRange& timeRange, const int byteCount, uint8_t* buffer, const QAudioFormat& format);
 
 private:
     FAudioDecoder* decoder = nullptr;

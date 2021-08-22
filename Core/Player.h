@@ -48,7 +48,7 @@ public:
     ~FPlayer();
 
 public:
-    FVideoDescription *videoDescription = nullptr;
+    const FVideoDescription *videoDescription = nullptr;
 
     void play();
     void pause();

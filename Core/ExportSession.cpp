@@ -33,7 +33,7 @@
 
 #include "FTime.h"
 #include "ScopeGuard.h"
-#include "FFmpeg.h"
+#include "Vendor/FFmpeg.h"
 #include "Util.h"
 
 FExportSession::FExportSession(FVideoDescription *des)
@@ -182,7 +182,7 @@ void FExportSession::start(std::function<void (int)> completionCallback)
                 break;
             }
 
-            FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeImageTime);
+            const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeImageTime);
             defer
             {
                 decodeImageTime = decodeImageTime + FMediaTime(1.0 / videoDescription->fps, videoCodecContext->time_base.den);
@@ -282,7 +282,7 @@ void FExportSession::start(std::function<void (int)> completionCallback)
                                             audioCodecContext->sample_rate, audioCodecContext->sample_rate, AV_ROUND_UP);
 
             FMediaTime duration = FMediaTime(frame->nb_samples, videoDescription->audioFormat.sampleRate());
-            FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeAudioTime);
+            const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeAudioTime);
 
             uint8_t* buffer = new uint8_t[outputBufferSize];
             defer {

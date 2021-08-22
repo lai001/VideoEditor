@@ -22,7 +22,7 @@
 #include <QString>
 #include <QMutex>
 #include "FTime.h"
-#include "FFmpeg.h"
+#include "Vendor/FFmpeg.h"
 #include "AudioBuffer.h"
 
 
@@ -50,6 +50,7 @@ public:
     FMediaTime fps() const;
 
 private:
+    QAudioFormat outputAudioFormat;
     AVSampleFormat outputSampleFormat = AV_SAMPLE_FMT_NONE;
     QMutex mutex;
     FMediaTime _lastDecodedAudioChunkDisplayTime = FMediaTime::zero;

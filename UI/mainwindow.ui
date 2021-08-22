@@ -101,6 +101,7 @@
     <addaction name="actionOpenFile"/>
     <addaction name="actionTestVideo"/>
     <addaction name="actionExport"/>
+    <addaction name="actionOpenProject"/>
    </widget>
    <addaction name="menuVideoEditor"/>
   </widget>
@@ -118,6 +119,11 @@
   <action name="actionExport">
    <property name="text">
     <string>Export</string>
+   </property>
+  </action>
+  <action name="actionOpenProject">
+   <property name="text">
+    <string>OpenProject</string>
    </property>
   </action>
  </widget>

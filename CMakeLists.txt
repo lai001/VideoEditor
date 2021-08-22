@@ -34,9 +34,9 @@ endif()
 include_directories("./Core" "./Core/Time" "./Core/Track" "./Core/Utility" "./Core/Time" "./UI" "./Test")
 
 IF (WIN32)
-include_directories("./Vendor/win32/ffmpeg/include")
+include_directories("./Vendor/win32/ffmpeg/include" "./Vendor/win32/rapidjson/include")
 ELSEIF (APPLE)
-include_directories("./Vendor/apple/ffmpeg/include")
+include_directories("./Vendor/apple/ffmpeg/include" "./Vendor/apple/rapidjson/include")
 ENDIF ()
 
 aux_source_directory("./Core" CORE_SRC)
@@ -55,7 +55,7 @@ ELSEIF (APPLE)
 link_directories("./Vendor/apple/ffmpeg/lib" REQUIRED)
 ENDIF ()
 
-add_executable(${PROJECT_NAME} ${DOSFLAG} ${CORE_SRC} ${CORE_TIME_SRC}  ${CORE_TRACK_SRC} ${CORE_TRACK_SRC} ${CORE_UTILITY_SRC} ${CORE_UI_SRC} ${MAIN_SRC})
+add_executable(${PROJECT_NAME} ${DOSFLAG} ${CORE_SRC} ${CORE_TIME_SRC}  ${CORE_TRACK_SRC} ${CORE_TRACK_SRC} ${CORE_UTILITY_SRC} ${CORE_UI_SRC} ${TEST_SRC} ${MAIN_SRC})
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Multimedia Qt5::Widgets avcodec avformat avutil swresample swscale)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_BINARY_DIR}/Test_autogen/include_Debug")
 

@@ -22,7 +22,7 @@ FMediaTimeRange::FMediaTimeRange()
 {
 }
 
-FMediaTimeRange::FMediaTimeRange(FMediaTime start, FMediaTime end)
+FMediaTimeRange::FMediaTimeRange(const FMediaTime start, const FMediaTime end)
     : start(start), end(end)
 {
 }

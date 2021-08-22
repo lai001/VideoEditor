@@ -15,18 +15,16 @@
 // You should have received a copy of the GNU General Public License
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef TEST_H
-#define TEST_H
-
-class Test
-{
-public:
-    Test();
-
-    static void case1();
-    static void case2();
-    static void case3();
-    static void case4();
-};
-
-#endif // TEST_H
+#include "FTime.h"
+#include "FTrack.h"
+#include "FUtility.h"
+#include "AudioBuffer.h"
+#include "ExportSession.h"
+#include "Image.h"
+#include "Player.h"
+#include "Resolution.h"
+#include "VideoDescription.h"
+#include "VideoFrameReceiver.h"
+#include "VideoInstruction.h"
+#include "VideoProject.h"
+#include "AudioPCMBuffer.h"

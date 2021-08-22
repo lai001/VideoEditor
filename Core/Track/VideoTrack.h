@@ -30,14 +30,14 @@ public:
     ~FVideoTrack();
 
     virtual const FImage *sourceFrame(FMediaTime time, QSize renderSize, float renderScale) override;
-    virtual FImage *compositionImage(FImage *sourceFrame, FMediaTime compositionTime, QSize renderSize, float renderScale) override;
+    virtual FImage *compositionImage(const FImage *sourceFrame, const FMediaTime compositionTime, const QSize renderSize, const float renderScale) override;
 
-    virtual void prepare(FVideoDescription *videoDescription) override;
-    virtual void didReloadFrame(FVideoDescription *videoDescription) override;
+    virtual void prepare(const FVideoDescription& videoDescription) override;
+    virtual void didReloadFrame(const FVideoDescription& videoDescription) override;
 
-    virtual void requestCleanCache(FMediaTimeRange timeRange) override;
+    virtual void requestCleanCache(const FMediaTimeRange timeRange) override;
     void requestCleanAllCache() override;
-    void onSeeking(FMediaTime time) override;
+    void onSeeking(const FMediaTime time) override;
 
 private:
     FVideoDecoder *decoder = nullptr;

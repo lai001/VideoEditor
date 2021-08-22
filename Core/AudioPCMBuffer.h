@@ -15,29 +15,37 @@
 // You should have received a copy of the GNU General Public License
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef FMEDIATIMERANGE_H
-#define FMEDIATIMERANGE_H
+#ifndef AUDIOPCMBUFFER_H
+#define AUDIOPCMBUFFER_H
 
-#include "MediaTime.h"
-#include <QDebug>
+#include "FTime.h"
+#include <QAudioFormat>
 
-struct FMediaTimeRange
+class FAudioPCMBuffer
 {
-public:
-    FMediaTimeRange();
-    FMediaTimeRange(const FMediaTime start, const FMediaTime end);
+private:
+    QAudioFormat _format;
+    int _capacity;
+    uint8_t** channelData = nullptr;
 
 public:
-    FMediaTime start;
-    FMediaTime end;
+    FAudioPCMBuffer(const QAudioFormat format, const int capacity);
+    FAudioPCMBuffer(const FAudioPCMBuffer& buffer);
+    FAudioPCMBuffer &operator=(const FAudioPCMBuffer &buffer);
+    ~FAudioPCMBuffer();
 
-    FMediaTime duration() const;
-    bool isEmpty() const;
+    FMediaTimeRange timeRange;
 
-    FMediaTimeRange intersection(const FMediaTimeRange otherTimeRange) const;
-    bool containsTime(const FMediaTime time) const;
+    QAudioFormat audioFormat() const;
+    int capacity() const;
+    uint bytesPerSample() const;
+    int bytesDataSize() const;
+
+    const float **floatChannelData() const;
+    const int16_t **int16ChannelData() const;
+    const uint16_t **uint16ChannelData() const;
 
     QString debugDescription() const;
 };
 
-#endif // FMEDIATIMERANGE_H
+#endif // AUDIOPCMBUFFER_H

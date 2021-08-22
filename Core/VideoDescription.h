@@ -39,7 +39,7 @@ public:
 
     static QVector<FMediaTimeRange> instructionTimeRanges(QVector<FMediaTimeRange>);
 
-    FVideoInstruction *videoInstuction(const FMediaTime time);
+    const FVideoInstruction *videoInstuction(const FMediaTime time) const;
 
     QVector<FImageTrack *> imageTracks;
     QVector<FAudioTrack *> audioTracks;

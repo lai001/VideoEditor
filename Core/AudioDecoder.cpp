@@ -19,7 +19,7 @@
 #include "FrameWrapper.h"
 
 FAudioDecoder::FAudioDecoder(QString filePath, QAudioFormat format)
-    : filePath(filePath)
+    : filePath(filePath), outputAudioFormat(format)
 {
     formatContext = avformat_alloc_context();
 

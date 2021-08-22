@@ -17,10 +17,6 @@
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "FrameWrapper.h"
-#include "ScopeGuard.h"
-
-#include "ExportSession.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -66,6 +62,12 @@ void MainWindow::cleanResource()
         }
     }
     audioTracks.clear();
+
+    if (project)
+    {
+        delete project;
+        project = nullptr;
+    }
 }
 
 void MainWindow::on_actionOpenFile_triggered()
@@ -276,4 +278,20 @@ void MainWindow::on_actionExport_triggered()
         delete videoDescription;
         videoDescription = nullptr;
     });
+}
+
+void MainWindow::on_actionOpenProject_triggered()
+{
+    cleanResource();
+    QString filePath = QFileDialog::getOpenFileName(this, "Open project", QString(), "(*.veproj)");
+    if (filePath.isEmpty())
+    {
+        return;
+    }
+    player = new FPlayer();
+    project = new FVideoProject(filePath);
+    project->prepare();
+    player->videoDescription = project->getVideoDescription();
+    player->setReceiver(this);
+    player->play();
 }

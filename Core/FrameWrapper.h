@@ -18,7 +18,7 @@
 #ifndef FFRAMEWRAPPER_H
 #define FFRAMEWRAPPER_H
 
-#include "FFmpeg.h"
+#include "Vendor/FFmpeg.h"
 
 class FFrameWrapper
 {

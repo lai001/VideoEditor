@@ -34,14 +34,14 @@ public:
     QString filePath;
 
     virtual const FImage *sourceFrame(FMediaTime time, QSize renderSize, float renderScale) = 0;
-    virtual FImage *compositionImage(FImage *sourceFrame, FMediaTime compositionTime, QSize renderSize, float renderScale) = 0;
+    virtual FImage *compositionImage(const FImage *sourceFrame, const FMediaTime compositionTime, const QSize renderSize, const float renderScale) = 0;
 
-    virtual void prepare(FVideoDescription *videoDescription) = 0;
-    virtual void didReloadFrame(FVideoDescription *videoDescription) = 0;
+    virtual void prepare(const FVideoDescription& videoDescription) = 0;
+    virtual void didReloadFrame(const FVideoDescription& videoDescription) = 0;
 
-    virtual void requestCleanCache(FMediaTimeRange timeRange) = 0;
+    virtual void requestCleanCache(const FMediaTimeRange timeRange) = 0;
     virtual void requestCleanAllCache() = 0;
-    virtual void onSeeking(FMediaTime time) = 0;
+    virtual void onSeeking(const FMediaTime time) = 0;
 };
 
 #endif // FIMAGETRACK_H

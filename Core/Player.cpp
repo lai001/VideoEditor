@@ -74,6 +74,11 @@ FPlayer::~FPlayer()
 
 void FPlayer::play()
 {
+    if (videoDescription == nullptr)
+    {
+        return;
+    }
+    
     startPlayTime = QDateTime::currentDateTime();
 
     if (imagetOutputTimer)
@@ -109,6 +114,11 @@ void FPlayer::play()
 
 void FPlayer::pause()
 {
+    if (videoDescription == nullptr)
+    {
+        return;
+    }
+    
     if (imagetOutputTimer)
     {
         if (imagetOutputTimer->isActive())
@@ -137,6 +147,11 @@ void FPlayer::pause()
 
 void FPlayer::seek(FMediaTime time, std::function<void()> completion)
 {
+    if (videoDescription == nullptr)
+    {
+        return;
+    }
+    
     videoSeekingContext.setTraceSeekTime(time);
     audioSeekingContext.setTraceSeekTime(time);
     playTime = time;
@@ -221,7 +236,7 @@ void FPlayer::openDecodeImageThread()
                     videoSeekingContext.setLastSeekTime(traceSeekTime);
                 }
 
-                FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeImageTime);
+                const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeImageTime);
                 if (videoInstuction == nullptr)
                 {
                     break;
@@ -409,7 +424,7 @@ void FPlayer::openAudioThread()
 //                continue;
             }
 
-            FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeAudioTime);
+            const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeAudioTime);
             if (videoInstuction == nullptr)
             {
                 break;

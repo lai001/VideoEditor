@@ -23,19 +23,19 @@ FMediaTime::FMediaTime()
 {
 }
 
-FMediaTime::FMediaTime(double seconds, int timeScale)
+FMediaTime::FMediaTime(const double seconds, const int timeScale)
 {
     rational.num = seconds * double(timeScale);
     rational.den = timeScale;
 }
 
-FMediaTime::FMediaTime(int timeValue, int timeScale)
+FMediaTime::FMediaTime(const int timeValue, const int timeScale)
 {
     rational.num = timeValue;
     rational.den = timeScale;
 }
 
-FMediaTime::FMediaTime(AVRational rational)
+FMediaTime::FMediaTime(const AVRational rational)
     : rational(rational)
 {
 }
@@ -50,41 +50,41 @@ const AVRational FMediaTime::getRational() const
     return rational;
 }
 
-int FMediaTime::timeValue()
+int FMediaTime::timeValue() const
 {
     return rational.num;
 }
 
-int FMediaTime::timeScale()
+int FMediaTime::timeScale() const
 {
     return rational.den;
 }
 
-FMediaTime FMediaTime::add(FMediaTime time)
+FMediaTime FMediaTime::add(const FMediaTime time) const
 {
     FMediaTime newTime = FMediaTime(av_add_q(rational, time.rational));
     return newTime;
 }
 
-FMediaTime FMediaTime::subtract(FMediaTime time)
+FMediaTime FMediaTime::subtract(const FMediaTime time) const
 {
     FMediaTime newTime = FMediaTime(av_sub_q(rational, time.rational));
     return newTime;
 }
 
-FMediaTime FMediaTime::muliply(FMediaTime time)
+FMediaTime FMediaTime::muliply(const FMediaTime time) const
 {
     FMediaTime newTime = FMediaTime(av_mul_q(rational, time.rational));
     return newTime;
 }
 
-FMediaTime FMediaTime::convertScale(int timeScale)
+FMediaTime FMediaTime::convertScale(const int timeScale) const
 {
     FMediaTime newTime = FMediaTime((int)((double)timeValue() / (double)this->timeScale() * (double)timeScale), timeScale);
     return newTime;
 }
 
-FMediaTime FMediaTime::nearer(FMediaTime time0, FMediaTime time1)
+FMediaTime FMediaTime::nearer(const FMediaTime time0, const FMediaTime time1) const
 {
     int compareResult = av_nearer_q(getRational(), time0.getRational(), time1.getRational());
     if (compareResult == 1)
@@ -101,7 +101,7 @@ FMediaTime FMediaTime::nearer(FMediaTime time0, FMediaTime time1)
     }
 }
 
-FMediaTime FMediaTime::invert()
+FMediaTime FMediaTime::invert() const
 {
     return FMediaTime(av_inv_q(this->getRational()));
 }

@@ -24,7 +24,7 @@ struct FMediaTimeMapping
 {
 public:
     FMediaTimeMapping();
-    FMediaTimeMapping(FMediaTimeRange source, FMediaTimeRange target);
+    FMediaTimeMapping(const FMediaTimeRange source, const FMediaTimeRange target);
 
 //private:
     FMediaTimeRange source;

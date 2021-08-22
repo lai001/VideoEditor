@@ -21,7 +21,7 @@ FMediaTimeMapping::FMediaTimeMapping()
 {
 }
 
-FMediaTimeMapping::FMediaTimeMapping(FMediaTimeRange source, FMediaTimeRange target)
+FMediaTimeMapping::FMediaTimeMapping(const FMediaTimeRange source, const FMediaTimeRange target)
     : source(source), target(target)
 {
 }

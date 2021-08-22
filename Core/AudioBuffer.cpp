@@ -27,6 +27,6 @@ FAudioBuffer::~FAudioBuffer()
     if (pcmBuffer)
     {
         delete[] pcmBuffer;
+        pcmBuffer = nullptr;
     }
-    pcmBuffer = nullptr;
 }

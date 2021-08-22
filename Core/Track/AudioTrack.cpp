@@ -33,14 +33,14 @@ FAudioTrack::~FAudioTrack()
     requestCleanAllCache();
 }
 
-void FAudioTrack::prepare(FVideoDescription *videoDescription)
+void FAudioTrack::prepare(const FVideoDescription& videoDescription)
 {
     if (decoder)
     {
         delete decoder;
         decoder = nullptr;
     }
-    QAudioFormat format = videoDescription->audioFormat;
+    QAudioFormat format = videoDescription.audioFormat;
     decoder = new FAudioDecoder(filePath, format);
     audioFormat = format;
 }
@@ -55,7 +55,7 @@ void FAudioTrack::requestCleanAllCache()
     audioBuffers.clear();
 }
 
-void FAudioTrack::onSeeking(FMediaTime time)
+void FAudioTrack::onSeeking(const FMediaTime& time)
 {
     if (decoder)
     {
@@ -64,7 +64,7 @@ void FAudioTrack::onSeeking(FMediaTime time)
     }
 }
 
-void FAudioTrack::samples(FMediaTimeRange timeRange, int byteCount, uint8_t* buffer, QAudioFormat format)
+void FAudioTrack::samples(const FMediaTimeRange& timeRange, const int byteCount, uint8_t* buffer, const QAudioFormat& format)
 {
 
     QMutexLocker locker(&decoderMutex);

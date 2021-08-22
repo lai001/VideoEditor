@@ -61,7 +61,7 @@ void FVideoDescription::prepare()
         {
             if (imageTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
             {
-                imageTrack->prepare(this);
+                imageTrack->prepare(*this);
                 videoInstruction->imageTracks.append(imageTrack);
             }
         }
@@ -70,7 +70,7 @@ void FVideoDescription::prepare()
         {
             if (audioTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
             {
-                audioTrack->prepare(this);
+                audioTrack->prepare(*this);
                 videoInstruction->audioTracks.append(audioTrack);
             }
         }
@@ -128,7 +128,7 @@ QVector<FMediaTimeRange> FVideoDescription::instructionTimeRanges(QVector<FMedia
     return _timeRanges;
 }
 
-FVideoInstruction *FVideoDescription::videoInstuction(const FMediaTime time)
+const FVideoInstruction *FVideoDescription::videoInstuction(const FMediaTime time) const
 {
     FVideoInstruction *mvideoInstruction = nullptr;
     for (FVideoInstruction *videoInstruction : videoInstructions)

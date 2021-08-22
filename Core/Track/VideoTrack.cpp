@@ -73,12 +73,12 @@ const FImage *FVideoTrack::sourceFrame(FMediaTime time, QSize renderSize, float 
     return nullptr;
 }
 
-FImage *FVideoTrack::compositionImage(FImage *sourceFrame, FMediaTime compositionTime, QSize renderSize, float renderScale)
+FImage *FVideoTrack::compositionImage(const FImage *sourceFrame, const FMediaTime compositionTime, const QSize renderSize, const float renderScale)
 {
-    return nullptr;
+    return const_cast<FImage *>(sourceFrame);
 }
 
-void FVideoTrack::prepare(FVideoDescription *videoDescription)
+void FVideoTrack::prepare(const FVideoDescription& videoDescription)
 {
     if (decoder)
     {
@@ -88,11 +88,11 @@ void FVideoTrack::prepare(FVideoDescription *videoDescription)
     //    qDebug() << decoder->fps() << QFileInfo(filePath).baseName();
 }
 
-void FVideoTrack::didReloadFrame(FVideoDescription *videoDescription)
+void FVideoTrack::didReloadFrame(const FVideoDescription& videoDescription)
 {
 }
 
-void FVideoTrack::requestCleanCache(FMediaTimeRange timeRange)
+void FVideoTrack::requestCleanCache(const FMediaTimeRange timeRange)
 {
     QMutexLocker locker(&decoderMutex);
     FMediaTimeRange cleanTimeRange = timeRange;
@@ -115,7 +115,7 @@ void FVideoTrack::requestCleanCache(FMediaTimeRange timeRange)
             videoFrameQueue.end());
 }
 
-void FVideoTrack::onSeeking(FMediaTime time)
+void FVideoTrack::onSeeking(const FMediaTime time)
 {
     if (decoder)
     {

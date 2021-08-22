@@ -17,7 +17,7 @@
 
 #include "Util.h"
 
-#include "FFmpeg.h"
+#include "Vendor/FFmpeg.h"
 #include <QApplication>
 #include <QAbstractEventDispatcher>
 
