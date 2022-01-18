@@ -17,15 +17,17 @@
 
 #ifndef FMEDIATIMERANGE_H
 #define FMEDIATIMERANGE_H
-
+#include <string>
 #include "MediaTime.h"
-#include <QDebug>
 
 struct FMediaTimeRange
 {
 public:
     FMediaTimeRange();
     FMediaTimeRange(const FMediaTime start, const FMediaTime end);
+
+public:
+	static FMediaTimeRange zero;
 
 public:
     FMediaTime start;
@@ -36,8 +38,9 @@ public:
 
     FMediaTimeRange intersection(const FMediaTimeRange otherTimeRange) const;
     bool containsTime(const FMediaTime time) const;
+	FMediaTime clamp(const FMediaTime& time) const;
 
-    QString debugDescription() const;
+    std::string debugDescription() const;
 };
 
 #endif // FMEDIATIMERANGE_H

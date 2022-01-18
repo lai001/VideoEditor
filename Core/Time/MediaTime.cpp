@@ -16,7 +16,8 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "MediaTime.h"
-#include <QObject>
+#include "ThirdParty/spdlog.h"
+#include "Utility/FUtility.h"
 
 FMediaTime::FMediaTime()
     : rational(FMediaTime::zero.getRational())
@@ -78,6 +79,12 @@ FMediaTime FMediaTime::muliply(const FMediaTime time) const
     return newTime;
 }
 
+FMediaTime FMediaTime::div(const FMediaTime time) const
+{
+	FMediaTime newTime = FMediaTime(av_div_q(rational, time.rational));
+	return newTime;
+}
+
 FMediaTime FMediaTime::convertScale(const int timeScale) const
 {
     FMediaTime newTime = FMediaTime((int)((double)timeValue() / (double)this->timeScale() * (double)timeScale), timeScale);
@@ -106,11 +113,10 @@ FMediaTime FMediaTime::invert() const
     return FMediaTime(av_inv_q(this->getRational()));
 }
 
-QString FMediaTime::debugDescription() const
+
+std::string FMediaTime::debugDescription() const
 {
-    QString t;
-    t.sprintf("%8p", this);
-    return QString("<%1> seconds: %2").arg(t).arg(seconds());
+	return fmt::format("[timeValue] = {} [timeScale] = {} [seconds] = {:.5f}", timeValue(), timeScale(), seconds());
 }
 
 FMediaTime FMediaTime::operator+(const FMediaTime &time)
@@ -121,6 +127,36 @@ FMediaTime FMediaTime::operator+(const FMediaTime &time)
 FMediaTime FMediaTime::operator-(const FMediaTime &time)
 {
     return this->subtract(time);
+}
+
+FMediaTime FMediaTime::operator+(const FMediaTime & time) const
+{
+	return this->add(time);
+}
+
+FMediaTime FMediaTime::operator-(const FMediaTime & time) const
+{
+	return this->subtract(time);
+}
+
+FMediaTime FMediaTime::operator*(const FMediaTime & time)
+{
+	return this->muliply(time);
+}
+
+FMediaTime FMediaTime::operator/(const FMediaTime & time)
+{
+	return this->div(time);
+}
+
+FMediaTime FMediaTime::operator*(const FMediaTime & time) const
+{
+	return this->muliply(time);
+}
+
+FMediaTime FMediaTime::operator/(const FMediaTime & time) const
+{
+	return this->div(time);
 }
 
 bool FMediaTime::operator<(const FMediaTime &time) const
@@ -153,4 +189,4 @@ bool FMediaTime::operator>=(const FMediaTime &time) const
     return *this > time || *this == time;
 }
 
-FMediaTime FMediaTime::zero = FMediaTime(0.0, 600);
+FMediaTime FMediaTime::zero = FMediaTime(0, 1);

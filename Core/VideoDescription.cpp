@@ -16,142 +16,132 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "VideoDescription.h"
-#include <QMap>
+#include <algorithm>
+#include <unordered_map>
 
 FVideoDescription::FVideoDescription()
 {
-    int sampleRate = 44100;
-    QAudioFormat format;
-    format.setSampleRate(sampleRate);                
-    format.setChannelCount(2);                       
-    format.setSampleSize(16);                       
-    format.setCodec("audio/pcm");                   
-    format.setByteOrder(QAudioFormat::LittleEndian); 
-    format.setSampleType(QAudioFormat::UnSignedInt); 
-    audioFormat = format;
+	FAudioFormat format;
+	format.sampleRate = 44100;
+	format.channelsPerFrame = 2;
+	format.bitsPerChannel = 16;
+	format.formatType = AudioFormatIdentifiersType::pcm;
+	format.formatFlags = 0;
+	renderContext.audioRenderContext.audioFormat = format;
 }
 
 FVideoDescription::~FVideoDescription()
 {
-    removeAllVideoInstuctions();
+
 }
 
 void FVideoDescription::prepare()
 {
-    _duration = FMediaTime::zero;
-    QVector<FMediaTimeRange> timeRanges;
-    for (FImageTrack *imageTrack : imageTracks)
-    {
-        timeRanges.append(imageTrack->timeMapping.target);
-    }
-    for (FAudioTrack *audioTrack : audioTracks)
-    {
-        timeRanges.append(audioTrack->timeMapping.target);
-    }
-    QVector<FMediaTimeRange> instructionTimeRanges = FVideoDescription::instructionTimeRanges(timeRanges);
+	_duration = FMediaTime::zero;
+	std::vector<FMediaTimeRange> timeRanges;
+	for (FImageTrack *imageTrack : imageTracks)
+	{
+		timeRanges.push_back(imageTrack->timeMapping.target);
+	}
+	for (FAudioTrack *audioTrack : audioTracks)
+	{
+		timeRanges.push_back(audioTrack->timeMapping.target);
+	}
+	std::vector<FMediaTimeRange> instructionTimeRanges = FVideoDescription::instructionTimeRanges(timeRanges);
 
-    removeAllVideoInstuctions();
+	removeAllVideoInstuctions();
 
-    for (FMediaTimeRange timeRange : instructionTimeRanges)
-    {
-        FVideoInstruction *videoInstruction = new FVideoInstruction();
-        videoInstruction->timeRange = timeRange;
+	for (FMediaTimeRange timeRange : instructionTimeRanges)
+	{
+		FVideoInstruction videoInstruction;
+		videoInstruction.timeRange = timeRange;
 
-        for (FImageTrack *imageTrack : imageTracks)
-        {
-            if (imageTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
-            {
-                imageTrack->prepare(*this);
-                videoInstruction->imageTracks.append(imageTrack);
-            }
-        }
+		for (FImageTrack *imageTrack : imageTracks)
+		{
+			if (imageTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
+			{
+				imageTrack->prepare(renderContext.videoRenderContext);
+				videoInstruction.imageTracks.push_back(imageTrack);
+			}
+		}
 
-        for (FAudioTrack *audioTrack : audioTracks)
-        {
-            if (audioTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
-            {
-                audioTrack->prepare(*this);
-                videoInstruction->audioTracks.append(audioTrack);
-            }
-        }
+		for (FAudioTrack *audioTrack : audioTracks)
+		{
+			if (audioTrack->timeMapping.target.intersection(timeRange).isEmpty() == false)
+			{
+				audioTrack->prepare(renderContext.audioRenderContext);
+				videoInstruction.audioTracks.push_back(audioTrack);
+			}
+		}
 
-        _duration = qMax(timeRange.end, _duration);
-        videoInstructions.append(videoInstruction);
-    }
+		_duration = std::max(timeRange.end, _duration);
+		videoInstructions.push_back(videoInstruction);
+	}
 }
 
-QVector<FMediaTimeRange> FVideoDescription::instructionTimeRanges(QVector<FMediaTimeRange> timeRanges)
+std::vector<FMediaTimeRange> FVideoDescription::instructionTimeRanges(std::vector<FMediaTimeRange> timeRanges)
 {
-    QMap<double, FMediaTime> keyTimes;
+	std::unordered_map<double, FMediaTime> keyTimes;
 
-    for (FMediaTimeRange timeRange : timeRanges)
-    {
-        keyTimes[timeRange.start.seconds()] = timeRange.start;
-        keyTimes[timeRange.end.seconds()] = timeRange.end;
-    }
-    FMediaTime cursor = FMediaTime::zero;
+	for (FMediaTimeRange timeRange : timeRanges)
+	{
+		keyTimes[timeRange.start.seconds()] = timeRange.start;
+		keyTimes[timeRange.end.seconds()] = timeRange.end;
+	}
+	FMediaTime cursor = FMediaTime::zero;
 
-    QVector<FMediaTimeRange> _timeRanges;
+	std::vector<FMediaTimeRange> _timeRanges;
 
-    while (true)
-    {
-        FMediaTime *minTime = nullptr;
-        QVector<FMediaTime> greaterThanCursorTimes;
-        for (auto key : keyTimes.keys())
-        {
-            FMediaTime keyTime = keyTimes[key];
-            if (keyTime > cursor)
-            {
-                greaterThanCursorTimes.append(keyTime);
-            }
-        }
-        if (greaterThanCursorTimes.isEmpty() == false)
-        {
-            qSort(greaterThanCursorTimes.begin(), greaterThanCursorTimes.end());
-            minTime = std::min_element(greaterThanCursorTimes.begin(), greaterThanCursorTimes.end());
-            if (minTime == nullptr)
-            {
-                break;
-            }
-            else
-            {
-                FMediaTimeRange range = FMediaTimeRange(cursor, *minTime);
-                _timeRanges.append(range);
-                cursor = *minTime;
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-    return _timeRanges;
+	while (true)
+	{
+
+		std::vector<FMediaTime>::iterator minTime;
+		std::vector<FMediaTime> greaterThanCursorTimes;
+
+		for (auto args : keyTimes)
+		{
+			FMediaTime keyTime = keyTimes[args.first];
+			if (keyTime > cursor)
+			{
+				greaterThanCursorTimes.push_back(keyTime);
+			}
+		}
+		if (greaterThanCursorTimes.empty() == false)
+		{
+			std::sort(greaterThanCursorTimes.begin(), greaterThanCursorTimes.end());
+			minTime = std::min_element(greaterThanCursorTimes.begin(), greaterThanCursorTimes.end());
+
+			FMediaTimeRange range = FMediaTimeRange(cursor, *minTime);
+			_timeRanges.push_back(range);
+			cursor = *minTime;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return _timeRanges;
 }
 
-const FVideoInstruction *FVideoDescription::videoInstuction(const FMediaTime time) const
+bool FVideoDescription::videoInstuction(const FMediaTime time, FVideoInstruction& outVideoInstruction) const
 {
-    FVideoInstruction *mvideoInstruction = nullptr;
-    for (FVideoInstruction *videoInstruction : videoInstructions)
-    {
-        if (videoInstruction->timeRange.containsTime(time))
-        {
-            mvideoInstruction = videoInstruction;
-            break;
-        }
-    }
-    return mvideoInstruction;
+	for (FVideoInstruction videoInstruction : videoInstructions)
+	{
+		if (videoInstruction.timeRange.containsTime(time))
+		{
+			outVideoInstruction = videoInstruction;
+			return true;
+		}
+	}
+	return false;
 }
 
 FMediaTime FVideoDescription::duration() const
 {
-    return _duration;
+	return _duration;
 }
 
 void FVideoDescription::removeAllVideoInstuctions()
 {
-    for (FVideoInstruction *videoInstruction : videoInstructions)
-    {
-        delete videoInstruction;
-    }
-    videoInstructions.clear();
+	videoInstructions.clear();
 }

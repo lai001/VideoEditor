@@ -18,39 +18,43 @@
 #ifndef FVIDEODECODER_H
 #define FVIDEODECODER_H
 
-#include <QString>
-#include <QImage>
-#include <QPixmap>
-#include <QMutex>
-#include "FTime.h"
-#include "VideoFrame.h"
-#include "Vendor/FFmpeg.h"
+#include <string>
+#include <vector>
 
-class FVideoDecoder
+#include "ThirdParty/FFmpeg.h"
+#include "Vendor/noncopyable.hpp"
+#include "PixelBuffer.h"
+#include "Time/FTime.h"
+
+class FVideoDecoder : public boost::noncopyable
 {
+protected:
+	FVideoDecoder();
+
 public:
-    FVideoDecoder(QString filePath);
-    ~FVideoDecoder();
+	static FVideoDecoder* New(const std::string & filePath, const PixelBufferFormatType& formatType);
+	~FVideoDecoder();
 
 private:
-    QString filePath = "";
+	std::string filePath = "";
 
-    AVFormatContext *formatContext = nullptr;
-    AVStream *videoStream = nullptr;
-    AVCodecContext *videoCodecCtx = nullptr;
-    AVCodec *codec = nullptr;
-    int videoStreamIndex = -1;
-    struct SwsContext *imageSwsContext = nullptr;
-    FMediaTime _lastDecodedImageDisplayTime = FMediaTime::zero;
+	AVFormatContext *formatContext = nullptr;
+	AVStream *videoStream = nullptr;
+	AVCodecContext *videoCodecCtx = nullptr;
+	AVCodec *codec = nullptr;
+	int videoStreamIndex = -1;
+	struct SwsContext *imageSwsContext = nullptr;
+	FMediaTime _lastDecodedImageDisplayTime = FMediaTime::zero;
 
-    QMutex mutex;
+private:
+	FPixelBuffer* newDecodedFrame(AVCodecContext * videoCodecCtx, AVFrame* frame, AVPacket* packet, FMediaTime& outTime);
 
 public:
-    int frameAtTime(FMediaTime time, FVideoFrame *videoFrame);
-    int seek(FMediaTime time);
+	FPixelBuffer* newFrame(FMediaTime& outPts);
+	bool seek(const FMediaTime& time);
 
-    FMediaTime lastDecodedImageDisplayTime();
-    FMediaTime fps();
+	FMediaTime lastDecodedImageDisplayTime();
+	FMediaTime fps();
 };
 
 #endif // FVIDEODECODER_H

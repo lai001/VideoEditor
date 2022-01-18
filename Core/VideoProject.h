@@ -18,34 +18,42 @@
 #ifndef VIDEOPROJECT_H
 #define VIDEOPROJECT_H
 
-#include <QString>
-#include "FVideoEditor.h"
+#include <string>
+#include <vector>
+#include "ThirdParty/rapidjson.h"
+#include "Vendor/noncopyable.hpp"
+#include "Track/FTrack.h"
+#include "VideoDescription.h"
 
-class FVideoProject
+class FVideoProject : public boost::noncopyable
 {
 private:
-    QString projectDir;
-    QString projectFilePath;
+	std::string projectDir;
+	std::string projectFilePath;
 
-    FVideoDescription *videoDescription = nullptr;
-    QVector<FImageTrack *> imageTracks;
-    QVector<FAudioTrack *> audioTracks;
+	FVideoDescription *videoDescription = nullptr;
+	//std::vector<FImageTrack *> imageTracks;
+	//std::vector<FAudioTrack *> audioTracks;
 
-    void clean();
+	void clean();
+	FMediaTimeRange converTimeRange(rapidjson::GenericObject<false, rapidjson::Value> timeRange, int timeScale);
+	bool loadVideoRenderContext(rapidjson::Document & doc, FVideoRenderContext& context);
+	bool loadAudioRenderContext(rapidjson::Document & doc, FAudioRenderContext& context);
+	bool loadVideoTracks(rapidjson::Document & doc);
+	bool loadAudioTracks(rapidjson::Document & doc);
 
 public:
-    FVideoProject(QString projectFilePath);
-    ~FVideoProject();
+	FVideoProject(const std::string& projectFilePath);
+	~FVideoProject();
 
-    void load();
-    bool prepare();
+	bool prepare();
 
-    const FVideoDescription *getVideoDescription() const;
-    const QVector<FImageTrack *> getImageTracks() const;
-    const QVector<FAudioTrack *> getAudioTracks() const;
+	const FVideoDescription *getVideoDescription() const;
+	const std::vector<FImageTrack *> getImageTracks() const;
+	const std::vector<FAudioTrack *> getAudioTracks() const;
 
-    FImageTrack *insertNewImageTrack();
-    FAudioTrack *insertNewAudioTrack();
+	FImageTrack *insertNewImageTrack();
+	FAudioTrack *insertNewAudioTrack();
 };
 
 #endif // VIDEOPROJECT_H

@@ -17,51 +17,29 @@
 
 #include "Util.h"
 
-#include "Vendor/FFmpeg.h"
-#include <QApplication>
-#include <QAbstractEventDispatcher>
-
-template <typename F>
-static void postToObject(F &&fun, QObject *obj = qApp) {
-  QMetaObject::invokeMethod(obj, std::forward<F>(fun));
-}
-
-template <typename F>
-static void postToThread(F && fun, QThread *thread = qApp->thread()) {
-   auto *obj = QAbstractEventDispatcher::instance(thread);
-   Q_ASSERT(obj);
-   QMetaObject::invokeMethod(obj, std::forward<F>(fun));
-}
+#include "ThirdParty/FFmpeg.h"
 
 FUtil::FUtil()
 {
 
 }
 
-std::function<double ()> FUtil::measue(bool fps)
+std::function<double()> FUtil::measue(bool fps)
 {
-    auto begin = av_gettime();
-    return [begin, fps]{
-        double duration = av_gettime() - begin;
-        if (fps)
-        {
-            return 1000000.0 / duration;
-        }
-        return duration;
-    };
+	auto begin = av_gettime();
+	return [begin, fps] {
+		double duration = av_gettime() - begin;
+		if (fps)
+		{
+			return 1000000.0 / duration;
+		}
+		return duration;
+	};
 }
 
-void FUtil::runInMainThread(std::function<void()> closure)
+std::string FUtil::ffmpegErrorDescription(int errorCode)
 {
-    postToThread([closure]{
-        closure();
-    });
+	char errStr[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+	av_strerror(errorCode, errStr, sizeof(errStr));
+	return std::string(errStr);
 }
-
-QString FUtil::ffmpegErrorDescription(int errorCode)
-{
-    char errStr[AV_ERROR_MAX_STRING_SIZE] = {0};
-    av_strerror(errorCode, errStr, sizeof(errStr));
-    return QString(errStr);
-}
-

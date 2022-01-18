@@ -17,145 +17,211 @@
 
 #include "VideoProject.h"
 #include <fstream>
-#include <QFile>
-#include <QTextCodec>
-#include <QFileInfo>
-#include <QDebug>
-#include "Vendor/rapidjson.h"
+#include <iostream>
+#include <unordered_map>
+#include "Utility/FUtility.h"
 
-FVideoProject::FVideoProject(QString projectFilePath)
-    : projectFilePath(projectFilePath)
+FVideoProject::FVideoProject(const std::string& projectFilePath)
+	: projectFilePath(projectFilePath)
 {
-    QFileInfo fileInfo(projectFilePath);
-    projectDir = fileInfo.absolutePath();
-    load();
+	projectDir = FUtil::GetFolder(projectFilePath);
+
+	videoDescription = new FVideoDescription();
+
+	std::ifstream ifs(projectFilePath);
+	rapidjson::IStreamWrapper isw(ifs);
+	rapidjson::Document doc;
+	doc.ParseStream(isw);
+
+	loadVideoTracks(doc);
+	loadAudioTracks(doc);
+
+	loadVideoRenderContext(doc, videoDescription->renderContext.videoRenderContext);
+	loadAudioRenderContext(doc, videoDescription->renderContext.audioRenderContext);
+
+	const FAudioFormat audioFormat = videoDescription->renderContext.audioRenderContext.audioFormat;
+	//assert(FUtil::getAVSampleFormat(audioFormat) == AV_SAMPLE_FMT_FLT);
 }
 
 FVideoProject::~FVideoProject()
 {
-    clean();
+	clean();
 }
 
 void FVideoProject::clean()
 {
-    if (videoDescription)
-    {
-        delete videoDescription;
-        videoDescription = nullptr;
-    }
+	for (FImageTrack *imageTrack : videoDescription->imageTracks)
+	{
+		delete imageTrack;
+	}
+	videoDescription->imageTracks.clear();
 
-    for (FImageTrack *imageTrack : imageTracks)
-    {
-        if (imageTrack)
-        {
-            delete imageTrack;
-        }
-    }
-    imageTracks.clear();
-
-    for (FAudioTrack *audioTrack : audioTracks)
-    {
-        if (audioTrack)
-        {
-            delete audioTrack;
-        }
-    }
-    audioTracks.clear();
+	for (FAudioTrack *audioTrack : videoDescription->audioTracks)
+	{
+		delete audioTrack;
+	}
+	videoDescription->audioTracks.clear();
+	delete videoDescription;
 }
 
-FMediaTimeRange converTimeRange(rapidjson::GenericObject<false, rapidjson::Value> timeRange, int timeScale = 600)
+bool FVideoProject::loadVideoRenderContext(rapidjson::Document& doc, FVideoRenderContext& context)
 {
-    double start = timeRange["start"].GetDouble();
-    double end = timeRange["end"].GetDouble();
-    return FMediaTimeRange(FMediaTime(start, timeScale), FMediaTime(end, timeScale));
+	rapidjson::GenericObject<false, rapidjson::Value> video_render_context = doc["video_render_context"].GetObject();
+
+	int width = video_render_context["render_size_width"].GetInt();
+	int height = video_render_context["render_size_height"].GetInt();
+	float fps = video_render_context["fps"].GetFloat();
+	float renderScale = video_render_context["render_scale"].GetFloat();
+
+	context.fps = fps;
+	context.renderScale = renderScale;
+	context.renderSize = FSize(width, height);
+	context.format = PixelBufferFormatType::rgba32;
+
+	return true;
 }
 
-void FVideoProject::load()
+bool FVideoProject::loadAudioRenderContext(rapidjson::Document & doc, FAudioRenderContext& context)
 {
-    clean();
+	std::unordered_map<std::string, AudioSampleType> table;
+	//table["uint16"] = AudioSampleType::uint16;
+	//table["uint32"] = AudioSampleType::uint32;
+	table["sint16"] = AudioSampleType::sint16;
+	table["sint32"] = AudioSampleType::sint32;
+	table["float32"] = AudioSampleType::float32;
+	table["float64"] = AudioSampleType::float64;
 
-    videoDescription = new FVideoDescription();
+	std::unordered_map<AudioSampleType, unsigned int> table1;
+	//table1[AudioSampleType::uint16] = 2;
+	//table1[AudioSampleType::uint32] = 4;
+	table1[AudioSampleType::sint16] = 2;
+	table1[AudioSampleType::sint32] = 4;
+	table1[AudioSampleType::float32] = 4;
+	table1[AudioSampleType::float64] = 8;
 
-    std::ifstream ifs(projectFilePath.toStdString());
-    rapidjson::IStreamWrapper isw(ifs);
-    rapidjson::Document doc;
-    doc.ParseStream(isw);
+	rapidjson::GenericObject<false, rapidjson::Value> audio_render_context = doc["audio_render_context"].GetObject();
+	rapidjson::GenericObject<false, rapidjson::Value> audio_format = audio_render_context["audio_format"].GetObject();
 
-    rapidjson::GenericArray<false, rapidjson::Value> videoTracksArray = doc["video_tracks"].GetArray();
-    for (rapidjson::Value &item : videoTracksArray)
-    {
-        rapidjson::GenericObject<false, rapidjson::Value> videoTrackDes = item.GetObject();
-        rapidjson::GenericObject<false, rapidjson::Value> sourceTimeRange = videoTrackDes["source_time_range"].GetObject();
-        rapidjson::GenericObject<false, rapidjson::Value> targetTimeRange = videoTrackDes["target_time_range"].GetObject();
+	float sample_rate = audio_format["sample_rate"].GetFloat();
+	std::string sample_type = audio_format["sample_type"].GetString();
+	int channel = audio_format["channel"].GetInt();
+	bool is_noninterleaved = audio_format["is_noninterleaved"].GetBool();
+	AudioSampleType sampleType = table[sample_type];
 
-        QString filepath = projectDir;
-        filepath.append("/");
-        filepath.append(QString(videoTrackDes["path"].GetString()));
+	context.audioFormat.formatType = AudioFormatIdentifiersType::pcm;
+	context.audioFormat.channelsPerFrame = channel;
+	context.audioFormat.framesPerPacket = 1;
+	context.audioFormat.formatFlags = 0;
+	context.audioFormat.bitsPerChannel = table1[sampleType] * 8;
 
-        qDebug() << filepath;
+	if (is_noninterleaved)
+	{
+		context.audioFormat.bytesPerFrame = table1[sampleType];
+	}
+	else
+	{
+		context.audioFormat.bytesPerFrame = table1[sampleType] * channel;
+	}
+	context.audioFormat.bytesPerPacket = context.audioFormat.bytesPerFrame;
 
-        FImageTrack *videoTrack = new FVideoTrack();
-        videoTrack->filePath = filepath;
-        videoTrack->timeMapping = FMediaTimeMapping(converTimeRange(sourceTimeRange), converTimeRange(targetTimeRange));
-        videoDescription->imageTracks.append(videoTrack);
-    }
+	if (is_noninterleaved)
+	{
+		context.audioFormat.formatFlags = Bitmask::insert(context.audioFormat.formatFlags, AudioFormatFlag::isNonInterleaved);
+	}
 
-    rapidjson::GenericArray<false, rapidjson::Value> audioTracksArray = doc["audio_tracks"].GetArray();
-    for (rapidjson::Value &item : audioTracksArray)
-    {
-        rapidjson::GenericObject<false, rapidjson::Value> audioTrackDes = item.GetObject();
-        rapidjson::GenericObject<false, rapidjson::Value> sourceTimeRange = audioTrackDes["source_time_range"].GetObject();
-        rapidjson::GenericObject<false, rapidjson::Value> targetTimeRange = audioTrackDes["target_time_range"].GetObject();
+	if ((sampleType == AudioSampleType::sint16) || (sampleType == AudioSampleType::sint32))
+	{
+		context.audioFormat.formatFlags = Bitmask::insert(context.audioFormat.formatFlags, AudioFormatFlag::isSignedInteger);
+	}
+	else if ((sampleType == AudioSampleType::float32) || (sampleType == AudioSampleType::float64))
+	{
+		context.audioFormat.formatFlags = Bitmask::insert(context.audioFormat.formatFlags, AudioFormatFlag::isFloat);
+	}
 
-        QString filepath = projectDir;
-        filepath.append("/");
-        filepath.append(QString(audioTrackDes["path"].GetString()));
 
-        qDebug() << filepath;
+	return true;
+}
 
-        FAudioTrack *audioTrack = new FAudioTrack();
-        audioTrack->filePath = filepath;
-        audioTrack->timeMapping = FMediaTimeMapping(converTimeRange(sourceTimeRange), converTimeRange(targetTimeRange));
-        videoDescription->audioTracks.append(audioTrack);
-    }
+bool FVideoProject::loadVideoTracks(rapidjson::Document& doc)
+{
+	rapidjson::GenericArray<false, rapidjson::Value> videoTracksArray = doc["video_tracks"].GetArray();
+	for (rapidjson::Value &item : videoTracksArray)
+	{
+		rapidjson::GenericObject<false, rapidjson::Value> videoTrackDes = item.GetObject();
+		rapidjson::GenericObject<false, rapidjson::Value> sourceTimeRange = videoTrackDes["source_time_range"].GetObject();
+		rapidjson::GenericObject<false, rapidjson::Value> targetTimeRange = videoTrackDes["target_time_range"].GetObject();
+
+		std::string filepath = projectDir;
+		filepath.append("/");
+		filepath.append(std::string(videoTrackDes["path"].GetString()));
+
+		FVideoTrack *videoTrack = new FVideoTrack();
+		videoTrack->filePath = filepath;
+		videoTrack->timeMapping = FMediaTimeMapping(converTimeRange(sourceTimeRange, 600), converTimeRange(targetTimeRange, 600));
+		videoDescription->imageTracks.push_back(videoTrack);
+	}
+	return true;
+}
+
+bool FVideoProject::loadAudioTracks(rapidjson::Document& doc)
+{
+	rapidjson::GenericArray<false, rapidjson::Value> audioTracksArray = doc["audio_tracks"].GetArray();
+	for (rapidjson::Value &item : audioTracksArray)
+	{
+		rapidjson::GenericObject<false, rapidjson::Value> audioTrackDes = item.GetObject();
+		rapidjson::GenericObject<false, rapidjson::Value> sourceTimeRange = audioTrackDes["source_time_range"].GetObject();
+		rapidjson::GenericObject<false, rapidjson::Value> targetTimeRange = audioTrackDes["target_time_range"].GetObject();
+
+		std::string filepath = projectDir;
+		filepath.append("/");
+		filepath.append(std::string(audioTrackDes["path"].GetString()));
+
+		FAudioTrack *audioTrack = new FAudioTrack();
+		audioTrack->filePath = filepath;
+		audioTrack->timeMapping = FMediaTimeMapping(converTimeRange(sourceTimeRange, 44100), converTimeRange(targetTimeRange, 44100));
+		videoDescription->audioTracks.push_back(audioTrack);
+	}
+	return true;
+}
+
+FMediaTimeRange FVideoProject::converTimeRange(rapidjson::GenericObject<false, rapidjson::Value> timeRange, int timeScale)
+{
+	double start = timeRange["start"].GetDouble();
+	double end = timeRange["end"].GetDouble();
+	return FMediaTimeRange(FMediaTime(start, timeScale), FMediaTime(end, timeScale));
 }
 
 const FVideoDescription *FVideoProject::getVideoDescription() const
 {
-    return videoDescription;
+	return videoDescription;
 }
 
-const QVector<FImageTrack *> FVideoProject::getImageTracks() const
+const std::vector<FImageTrack *> FVideoProject::getImageTracks() const
 {
-    return imageTracks;
+	return videoDescription->imageTracks;
 }
 
-const QVector<FAudioTrack *> FVideoProject::getAudioTracks() const
+const std::vector<FAudioTrack *> FVideoProject::getAudioTracks() const
 {
-    return audioTracks;
+	return videoDescription->audioTracks;
 }
 
 FImageTrack *FVideoProject::insertNewImageTrack()
 {
-    FImageTrack *videoTrack = new FVideoTrack();
-    videoDescription->imageTracks.append(videoTrack);
+	FImageTrack *videoTrack = new FVideoTrack();
+	videoDescription->imageTracks.push_back(videoTrack);
+	return videoTrack;
 }
 
 FAudioTrack *FVideoProject::insertNewAudioTrack()
 {
-    FAudioTrack *audioTrack = new FAudioTrack();
-    videoDescription->audioTracks.append(audioTrack);
+	FAudioTrack *audioTrack = new FAudioTrack();
+	videoDescription->audioTracks.push_back(audioTrack);
+	return audioTrack;
 }
 
 bool FVideoProject::prepare()
 {
-    if (videoDescription)
-    {
-        videoDescription->prepare();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+	videoDescription->prepare();
+	return true;
 }

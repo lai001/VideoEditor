@@ -16,182 +16,223 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "AudioDecoder.h"
-#include "FrameWrapper.h"
 
-FAudioDecoder::FAudioDecoder(QString filePath, QAudioFormat format)
-    : filePath(filePath), outputAudioFormat(format)
+#include <assert.h>
+
+#include "Utility/FUtility.h"
+
+FAudioDecoder * FAudioDecoder::New(const std::string & filePath, const FAudioFormat & format)
 {
-    formatContext = avformat_alloc_context();
+	SwrContext *swrctx = nullptr;
+	AVFormatContext *formatContext = nullptr;
+	AVStream *audioStream = nullptr;
+	AVCodecContext *audioCodecCtx = nullptr;
+	AVCodec *codec = nullptr;
+	int audioStreamIndex = -1;
 
-    if (avformat_open_input(&formatContext, filePath.toStdString().c_str(), NULL, NULL) != 0)
-    {
-        qDebug("Couldn't open input stream.");
-    }
+	do
+	{
+		AVFormatContext *formatContext = avformat_alloc_context();
 
-    if (avformat_find_stream_info(formatContext, NULL) < 0)
-    {
-        qDebug("Couldn't find stream information.");
-    }
+		if (avformat_open_input(&formatContext, filePath.c_str(), NULL, NULL) != 0)
+		{
+			break;
+		}
 
-    for (unsigned int i = 0; i < formatContext->nb_streams; i++)
-    {
-        if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
-        {
-            audioStreamIndex = i;
-            audioStream = formatContext->streams[i];
-            break;
-        }
-    }
+		if (avformat_find_stream_info(formatContext, NULL) < 0)
+		{
+			break;
+		}
 
-    codec = avcodec_find_decoder(audioStream->codecpar->codec_id);
-    audioCodecCtx = avcodec_alloc_context3(codec);
-    avcodec_parameters_to_context(audioCodecCtx, audioStream->codecpar);
+		for (unsigned int i = 0; i < formatContext->nb_streams; i++)
+		{
+			if (formatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+			{
+				audioStreamIndex = i;
+				audioStream = formatContext->streams[i];
+				break;
+			}
+		}
+		if (audioStreamIndex == -1)
+		{
+			break;
+		}
 
-    if (codec == nullptr)
-    {
-        qDebug("Codec not found.");
-    }
+		codec = avcodec_find_decoder(audioStream->codecpar->codec_id);
 
-    if (avcodec_open2(audioCodecCtx, codec, NULL) < 0)
-    {
-        qDebug("Could not open codec.");
-    }
+		if (codec == nullptr)
+		{
+			break;
+		}
 
-    AVSampleFormat sampleFormat = AV_SAMPLE_FMT_NONE;
+		audioCodecCtx = avcodec_alloc_context3(codec);
 
-    switch (format.sampleType()) {
-    case QAudioFormat::SampleType::SignedInt:
-        sampleFormat = AV_SAMPLE_FMT_S16;
-        break;
-    case QAudioFormat::SampleType::UnSignedInt:
-        sampleFormat = AV_SAMPLE_FMT_S16;
-        break;
-    case QAudioFormat::SampleType::Float:
-        sampleFormat = AV_SAMPLE_FMT_FLT;
-        break;
-    default:
-        break;
-    }
-    outputSampleFormat = sampleFormat;
-    swrctx = swr_alloc_set_opts(swrctx,
-                                av_get_default_channel_layout(format.channelCount()), sampleFormat, format.sampleRate(),
-                                audioCodecCtx->channel_layout, audioCodecCtx->sample_fmt, audioCodecCtx->sample_rate,
-                                0, nullptr);
-    swr_init(swrctx);
+		if (audioCodecCtx == nullptr)
+		{
+			break;
+		}
 
-    //    qint64 destMs = audioStream->duration / audioStream->time_base.den;
-    //    qDebug()<<"bit_rate:"<<audioCodecCtx->bit_rate;
-    //    qDebug()<<"sample_fmt:"<<av_get_sample_fmt_name(audioCodecCtx->sample_fmt);
-    //    qDebug()<<"channels:"<<audioCodecCtx->channels;
-    //    qDebug()<<"sample_rate:"<<audioCodecCtx->sample_rate;
-    //    qDebug()<<"duration (seconds):"<<destMs;
-    //    qDebug()<<"decode name:"<<codec->name;
+		avcodec_parameters_to_context(audioCodecCtx, audioStream->codecpar);
+
+		if (avcodec_open2(audioCodecCtx, codec, NULL) < 0)
+		{
+			break;
+		}
+		AVSampleFormat sampleFormat = FUtil::getAVSampleFormat(format);
+
+		swrctx = swr_alloc_set_opts(swrctx,
+			av_get_default_channel_layout(format.channelsPerFrame), sampleFormat, format.sampleRate,
+			audioCodecCtx->channel_layout, audioCodecCtx->sample_fmt, audioCodecCtx->sample_rate,
+			0, nullptr);
+		if (swrctx == nullptr)
+		{
+			break;
+		}
+
+		if (swr_init(swrctx) < 0)
+		{
+			break;
+		}
+
+		FAudioDecoder* audioDecoder = new FAudioDecoder();
+		audioDecoder->filePath = filePath;
+		audioDecoder->outputAudioFormat = format;
+		audioDecoder->swrctx = swrctx;
+		audioDecoder->formatContext = formatContext;
+		audioDecoder->audioStream = audioStream;
+		audioDecoder->audioCodecCtx = audioCodecCtx;
+		audioDecoder->codec = codec;
+		audioDecoder->audioStreamIndex = audioStreamIndex;
+
+		return audioDecoder;
+	} while (true);
+
+	if (swrctx)
+	{
+		swr_close(swrctx);
+		swr_free(&swrctx);
+	}
+	if (audioCodecCtx)
+	{
+		avcodec_close(audioCodecCtx);
+		avcodec_free_context(&audioCodecCtx);
+	}
+	if (formatContext)
+	{
+		avformat_close_input(&formatContext);
+		avformat_free_context(formatContext);
+	}
+
+	return nullptr;
+}
+
+FAudioDecoder::FAudioDecoder()
+{
 }
 
 FAudioDecoder::~FAudioDecoder()
 {
-    if (swrctx)
-    {
-        swr_close(swrctx);
-        swr_free(&swrctx);
-        swrctx = nullptr;
-    }
-    if (audioCodecCtx)
-    {
-        avcodec_close(audioCodecCtx);
-        avcodec_free_context(&audioCodecCtx);
-        audioCodecCtx = nullptr;
-    }
-    if (formatContext)
-    {
-        avformat_close_input(&formatContext);
-        avformat_free_context(formatContext);
-        formatContext = nullptr;
-    }
+	swr_close(swrctx);
+	swr_free(&swrctx);
+
+	avcodec_close(audioCodecCtx);
+	avcodec_free_context(&audioCodecCtx);
+
+	avformat_close_input(&formatContext);
+	avformat_free_context(formatContext);
 }
 
-int FAudioDecoder::frame(FAudioBuffer* audioBuffer)
+std::string FAudioDecoder::getFilePath() const
 {
-    AVFrame *frame = av_frame_alloc();
-    AVPacket *packet = av_packet_alloc();
-    int fRet = -1;
-    while (true)
-    {
-        FFrameWrapper wrapper = FFrameWrapper(packet, frame);
-        int ret = av_read_frame(formatContext, packet);
-        if (ret >= 0)
-        {
-            if (packet->stream_index == audioStreamIndex)
-            {
-                int ret = avcodec_decode_audio4(audioCodecCtx, frame, &ret, packet);
-                if (ret >= 0)
-                {
-                    double pts = (double)frame->pts / (double)audioStream->time_base.den;
-                    double duration = (double)frame->nb_samples / (double)frame->sample_rate;
+	return filePath;
+}
 
-                    int bytesPerSample = av_get_bytes_per_sample(outputSampleFormat);
-                    int byteCount = frame->nb_samples * bytesPerSample * av_get_channel_layout_nb_channels(frame->channel_layout);
+FAudioPCMBuffer* FAudioDecoder::newFrame(FMediaTimeRange& outTimeRange)
+{
+	AVFrame *frame = av_frame_alloc();
+	AVPacket *packet = av_packet_alloc();
+	defer
+	{
+		av_packet_free(&packet);
+		av_frame_free(&frame);
+	};
+	while (true)
+	{
+		defer
+		{
+			av_packet_unref(packet);
+			av_frame_unref(frame);
+		};
 
-                    uint8_t* pcm = new uint8_t[byteCount];
-                    ret = swr_convert(swrctx,
-                                      &pcm, frame->nb_samples,                          
-                                      (const uint8_t **)frame->data, frame->nb_samples); 
-
-                    audioBuffer->byteCount = byteCount;
-                    audioBuffer->pcmBuffer = pcm;
-                    audioBuffer->numberSamples = frame->nb_samples;
-                    audioBuffer->numberchannels = av_get_channel_layout_nb_channels(frame->channel_layout);
-                    audioBuffer->sampleRate = frame->sample_rate;
-                    audioBuffer->timeRange = FMediaTimeRange(FMediaTime(pts, frame->sample_rate), FMediaTime(pts + duration, frame->sample_rate));
-                    _lastDecodedAudioChunkDisplayTime = FMediaTime((int)frame->pts, (int)audioStream->time_base.den);
-                    fRet = 1;
-                    break;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    av_packet_free(&packet);
-    av_frame_free(&frame);
-    return fRet;
+		int ret = av_read_frame(formatContext, packet);
+		if (ret < 0)
+		{
+			break;
+		}
+		else
+		{
+			if (packet->stream_index == audioStreamIndex)
+			{
+				FAudioPCMBuffer* buffer = newDecodedPCMBuffer(audioCodecCtx, frame, packet, outTimeRange);
+				if (buffer)
+				{
+					_lastDecodedAudioChunkDisplayTime = outTimeRange.start;
+				}
+				return buffer;
+			}
+			else
+			{
+				continue;
+			}
+		}
+	}
+	return nullptr;
 }
 
 int FAudioDecoder::seek(FMediaTime time)
 {
-    QMutexLocker locker(&mutex);
-    FMediaTime seekTime = time;
-    seekTime = seekTime.convertScale(audioStream->time_base.den);
-    int seekResult = av_seek_frame(formatContext, audioStreamIndex, seekTime.timeValue(), AVSEEK_FLAG_BACKWARD);
-    if (seekResult < 0)
-    {
-        qErrnoWarning("seek failed! %.2f", seekTime.seconds());
-
-        return seekResult;
-    }
-    //    qDebug() << "start seek frame at time: " << time.debugDescription();
-    avcodec_flush_buffers(audioCodecCtx);
-    return 1;
+	FMediaTime seekTime = time;
+	seekTime = seekTime.convertScale(audioStream->time_base.den);
+	int seekResult = av_seek_frame(formatContext, audioStreamIndex, seekTime.timeValue(), AVSEEK_FLAG_BACKWARD);
+	if (seekResult < 0)
+	{
+		return seekResult;
+	}
+	avcodec_flush_buffers(audioCodecCtx);
+	return 1;
 }
 
 FMediaTime FAudioDecoder::lastDecodedAudioChunkDisplayTime() const
 {
-    return _lastDecodedAudioChunkDisplayTime;
+	return _lastDecodedAudioChunkDisplayTime;
 }
 
 FMediaTime FAudioDecoder::fps() const
 {
-    if (audioStream)
-    {
-        FMediaTime fps = FMediaTime(audioStream->avg_frame_rate);
-        return fps;
-    }
-    return FMediaTime(-1.0, 600);
+	if (audioStream)
+	{
+		FMediaTime fps = FMediaTime(audioStream->avg_frame_rate);
+		return fps;
+	}
+	return FMediaTime(-1.0, 600);
+}
+
+FAudioPCMBuffer * FAudioDecoder::newDecodedPCMBuffer(AVCodecContext* audioCodecCtx, AVFrame * frame, const AVPacket * packet, FMediaTimeRange & outTimeRange)
+{
+	int got_frame_ptr;
+	int ret = avcodec_decode_audio4(audioCodecCtx, frame, &got_frame_ptr, packet);
+	if (ret >= 0)
+	{
+		FAudioPCMBuffer* outPCMBuffer = new FAudioPCMBuffer(outputAudioFormat, frame->nb_samples);
+		const uint8_t ** source = const_cast<const uint8_t **>(frame->data);
+		ret = swr_convert(swrctx,
+			outPCMBuffer->channelData(), frame->nb_samples,
+			source, frame->nb_samples);
+		outTimeRange = FMediaTimeRange(FMediaTime((int)frame->pts, frame->sample_rate), FMediaTime((int)frame->pts + (int)frame->nb_samples, frame->sample_rate));
+		return outPCMBuffer;
+	}
+	else
+	{
+		return nullptr;
+	}
 }

@@ -18,18 +18,14 @@
 #ifndef FVIDEOINSTRUCTION_H
 #define FVIDEOINSTRUCTION_H
 
-#include "FTime.h"
-#include "ImageTrack.h"
-#include "AudioTrack.h"
+#include "Time/FTime.h"
+#include "Track/FTrack.h"
 
-class FVideoInstruction
+struct FVideoInstruction
 {
-public:
-    FVideoInstruction();
-
-    FMediaTimeRange timeRange;
-    QVector<FImageTrack *> imageTracks;
-    QVector<FAudioTrack *> audioTracks;
+	FMediaTimeRange timeRange;
+	std::vector<FImageTrack *> imageTracks;
+	std::vector<FAudioTrack *> audioTracks;
 };
 
 #endif // FVIDEOINSTRUCTION_H

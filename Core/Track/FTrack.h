@@ -15,6 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
+#ifndef FTRACK_H
+#define FTRACK_H
+
+#include "MediaTrack.h"
 #include "ImageTrack.h"
 #include "VideoTrack.h"
 #include "AudioTrack.h"
+
+#endif // FTRACK_H

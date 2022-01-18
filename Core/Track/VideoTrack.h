@@ -18,33 +18,42 @@
 #ifndef VIDEOTRACK_H
 #define VIDEOTRACK_H
 
-#include <QMutex>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include "ImageTrack.h"
 #include "VideoDecoder.h"
 
+struct FSourceFrame
+{
+	FPixelBuffer * sourceFrame = nullptr;
+	FMediaTime displayTime;
+};
+
 class FVideoTrack : public FImageTrack
 {
 public:
-    FVideoTrack();
-    ~FVideoTrack();
-
-    virtual const FImage *sourceFrame(FMediaTime time, QSize renderSize, float renderScale) override;
-    virtual FImage *compositionImage(const FImage *sourceFrame, const FMediaTime compositionTime, const QSize renderSize, const float renderScale) override;
-
-    virtual void prepare(const FVideoDescription& videoDescription) override;
-    virtual void didReloadFrame(const FVideoDescription& videoDescription) override;
-
-    virtual void requestCleanCache(const FMediaTimeRange timeRange) override;
-    void requestCleanAllCache() override;
-    void onSeeking(const FMediaTime time) override;
+	FVideoTrack();
+	~FVideoTrack();
 
 private:
-    FVideoDecoder *decoder = nullptr;
+	FVideoDecoder *decoder = nullptr;
 
-    QVector<FVideoFrame *> videoFrameQueue;
+	std::vector<FSourceFrame> videoFrameQueue;
 
-    QMutex decoderMutex;
+	std::mutex decoderMutex;
+
+public:
+	std::string filePath;
+
+public:
+	virtual const FPixelBuffer * sourceFrame(const FMediaTime & compositionTime, const FVideoRenderContext & renderContext) override;
+	virtual const FPixelBuffer * compositionImage(const FPixelBuffer & sourceFrame, const FMediaTime & compositionTime, const FVideoRenderContext & renderContext) override;
+	virtual void prepare(const FVideoRenderContext & renderContext) override;
+	virtual void onSeeking(const FMediaTime & compositionTime) override;
+	virtual void flush(const FMediaTime & compositionTime) override;
+	virtual void flush() override;
 };
 
 #endif // VIDEOTRACK_H

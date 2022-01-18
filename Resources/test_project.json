@@ -1,0 +1,74 @@
+{
+    "video_render_context": {
+        "render_size_width": 1280,
+        "render_size_height": 720,
+        "render_scale": 1.0,
+        "fps": 24.0,
+        "time_scale": 600,
+        "composition_time_range": {
+            "start": 0.0,
+            "end": 100.0
+        }
+    },
+    "audio_render_context": {
+        "audio_format": {
+            "sample_rate": 44100.0,
+            "sample_type": "float32",
+            "channel": 2,
+            "is_noninterleaved": false
+        },
+        "time_scale": 44100,
+        "composition_time_range": {
+            "start": 0.0,
+            "end": 100.0
+        }
+    },
+    "video_tracks": [
+        {
+            "path": "BigBuckBunny.mp4",
+            "source_time_range": {
+                "start": 0.0,
+                "end": 50.0
+            },
+            "target_time_range": {
+                "start": 0.0,
+                "end": 50.0
+            }
+        },
+        {
+            "path": "ElephantsDream.mp4",
+            "source_time_range": {
+                "start": 0.0,
+                "end": 50.0
+            },
+            "target_time_range": {
+                "start": 50.0,
+                "end": 100.0
+            }
+        }
+    ],
+    "audio_tracks": [
+        {
+            "path": "BigBuckBunny.mp4",
+            "source_time_range": {
+                "start": 0.0,
+                "end": 100.0
+            },
+            "target_time_range": {
+                "start": 0.0,
+                "end": 100.0
+            }
+        },
+        {
+            "path": "ElephantsDream.mp4",
+            "source_time_range": {
+                "start": 0.0,
+                "end": 100.0
+            },
+            "target_time_range": {
+                "start": 0.0,
+                "end": 100.0
+            }
+        }
+    ]
+}

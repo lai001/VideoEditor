@@ -18,8 +18,9 @@
 #ifndef FMEDIATIME_H
 #define FMEDIATIME_H
 
-#include <QString>
-#include "Vendor/FFmpeg.h"
+#include <string>
+
+#include "ThirdParty/FFmpeg.h"
 
 struct FMediaTime
 {
@@ -38,17 +39,26 @@ public:
     FMediaTime add(const FMediaTime time) const;
     FMediaTime subtract(const FMediaTime time) const;
     FMediaTime muliply(const FMediaTime time) const;
+    FMediaTime div(const FMediaTime time) const;
     FMediaTime convertScale(const int timeScale) const;
     FMediaTime nearer(const FMediaTime time0, const FMediaTime time1) const;
     FMediaTime invert() const;
 
-    QString debugDescription() const;
+    std::string debugDescription() const;
 
     /**
      * operator
      */
     FMediaTime operator+(const FMediaTime &time);
     FMediaTime operator-(const FMediaTime &time);
+	FMediaTime operator+(const FMediaTime &time) const;
+	FMediaTime operator-(const FMediaTime &time) const;
+
+	FMediaTime operator*(const FMediaTime &time);
+	FMediaTime operator/(const FMediaTime &time);
+	FMediaTime operator*(const FMediaTime &time) const;
+	FMediaTime operator/(const FMediaTime &time) const;
+
     bool operator<(const FMediaTime &time) const;
     bool operator>(const FMediaTime &time) const;
     bool operator==(const FMediaTime &time) const;

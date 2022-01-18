@@ -20,13 +20,7 @@
 
 class Test
 {
-public:
-    Test();
 
-    static void case1();
-    static void case2();
-    static void case3();
-    static void case4();
 };
 
 #endif // TEST_H

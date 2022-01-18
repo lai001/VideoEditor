@@ -15,16 +15,28 @@
 // You should have received a copy of the GNU General Public License
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "FTime.h"
-#include "FTrack.h"
-#include "FUtility.h"
-#include "AudioBuffer.h"
+#ifndef FVIDEOEDITOR_H
+#define FVIDEOEDITOR_H
+
+#include "Time/FTime.h"
+#include "Track/FTrack.h"
+#include "Utility/FUtility.h"
+
+#include "AudioDecoder.h"
+#include "AudioFormat.h"
+#include "AudioPCMBuffer.h"
+#include "AudioPlayer.h"
 #include "ExportSession.h"
-#include "Image.h"
-#include "Player.h"
+#include "Semaphore.h"
+#include "SimpleTimer.h"
+#include "ImageCompositionPipeline.h"
+#include "ImagePlayer.h"
+#include "PixelBuffer.h"
+#include "RenderContext.h"
 #include "Resolution.h"
+#include "VideoDecoder.h"
 #include "VideoDescription.h"
-#include "VideoFrameReceiver.h"
 #include "VideoInstruction.h"
 #include "VideoProject.h"
-#include "AudioPCMBuffer.h"
+
+#endif // FVIDEOEDITOR_H

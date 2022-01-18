@@ -16,125 +16,119 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "AudioPCMBuffer.h"
+#include <assert.h>
+#include "Utility/FUtility.h"
 
-FAudioPCMBuffer::FAudioPCMBuffer(const QAudioFormat format, const int capacity)
-    : _format(format), _capacity(capacity)
+FAudioPCMBuffer::FAudioPCMBuffer()
 {
-    assert(format.codec() == "audio/pcm");
-    assert(format.sampleType() != QAudioFormat::SampleType::Unknown);
-
-    channelData = new uint8_t *[format.channelCount()];
-    for (int i = 0; i < format.channelCount(); i++)
-    {
-        int size = bytesDataSize();
-        uint8_t *buffer = new uint8_t[size];
-        channelData[i] = buffer;
-    }
-
-    timeRange = FMediaTimeRange(FMediaTime(0, format.sampleRate()), FMediaTime(capacity, format.sampleRate()));
 }
 
-FAudioPCMBuffer::FAudioPCMBuffer(const FAudioPCMBuffer &pcmBuffer)
+FAudioPCMBuffer::FAudioPCMBuffer(const FAudioFormat format, const unsigned int frameCapacity)
+	: _audioFormat(format), _frameCapacity(frameCapacity)
 {
-    const QAudioFormat format = pcmBuffer.audioFormat();
-    channelData = new uint8_t *[format.channelCount()];
-    for (int i = 0; i < format.channelCount(); i++)
-    {
-        int size = pcmBuffer.bytesDataSize();
-        uint8_t *data = new uint8_t[size];
-        memcpy(data, pcmBuffer.channelData[i], size);
-        channelData[i] = data;
-    }
-}
 
-FAudioPCMBuffer &FAudioPCMBuffer::operator=(const FAudioPCMBuffer &pcmBuffer)
-{
-    if (this != &pcmBuffer)
-    {
-        if (channelData)
-        {
-            for (int i = 0; i < _format.channelCount(); i++)
-            {
-                if (channelData[i])
-                {
-                    delete[] channelData[i];
-                }
-            }
-            delete[] channelData;
-            channelData = nullptr;
-        }
-
-        const QAudioFormat format = pcmBuffer.audioFormat();
-        channelData = new uint8_t *[format.channelCount()];
-        for (int i = 0; i < format.channelCount(); i++)
-        {
-            int size = pcmBuffer.bytesDataSize();
-            uint8_t *_buffer = new uint8_t[size];
-            memcpy(_buffer, pcmBuffer.channelData[i], size);
-            channelData[i] = _buffer;
-        }
-    }
-    return *this;
+	if (format.isNonInterleaved())
+	{
+		_channelData = new uint8_t *[format.channelsPerFrame];
+		for (int i = 0; i < format.channelsPerFrame; i++)
+		{
+			int size = bytesDataSizePerChannel();
+			_channelData[i] = new uint8_t[size];
+			memset(_channelData[i], 0, size);
+		}
+	}
+	else
+	{
+		_channelData = new uint8_t *[1];
+		int size = bytesDataSizePerChannel();
+		_channelData[0] = new uint8_t[size];
+		memset(_channelData[0], 0, size);
+	}
 }
 
 FAudioPCMBuffer::~FAudioPCMBuffer()
 {
-    if (channelData)
-    {
-        for (int i = 0; i < _format.channelCount(); i++)
-        {
-            if (channelData[i])
-            {
-                delete[] channelData[i];
-            }
-        }
-        delete[] channelData;
-        channelData = nullptr;
-    }
+	if (_audioFormat.isNonInterleaved())
+	{
+		for (int i = 0; i < _audioFormat.channelsPerFrame; i++)
+		{
+			if (_channelData[i])
+			{
+				delete[] _channelData[i];
+			}
+		}
+		delete[] _channelData;
+	}
+	else
+	{
+		delete[] _channelData[0];
+		delete[] _channelData;
+	}
 }
 
-QAudioFormat FAudioPCMBuffer::audioFormat() const
+FAudioFormat FAudioPCMBuffer::audioFormat() const
 {
-    return _format;
+	return _audioFormat;
 }
 
-int FAudioPCMBuffer::capacity() const
+unsigned int FAudioPCMBuffer::frameCapacity() const
 {
-    return _capacity;
+	return _frameCapacity;
 }
 
-uint FAudioPCMBuffer::bytesPerSample() const
+unsigned int FAudioPCMBuffer::bytesPerSample() const
 {
-    int size = _format.bytesPerFrame() / _format.channelCount();
-    return size;
+	return _audioFormat.bitsPerChannel / 8;
 }
 
-const float **FAudioPCMBuffer::floatChannelData() const
+float **FAudioPCMBuffer::floatChannelData()
 {
-    assert(_format.sampleType() == QAudioFormat::SampleType::Float);
-    return (const float **)channelData;
+	return (float **)_channelData;
 }
 
-const int16_t **FAudioPCMBuffer::int16ChannelData() const
+short **FAudioPCMBuffer::int16ChannelData()
 {
-    assert(_format.sampleType() == QAudioFormat::SampleType::SignedInt);
-    return (const int16_t **)channelData;
+	return (short **)_channelData;
 }
 
-const uint16_t **FAudioPCMBuffer::uint16ChannelData() const
+unsigned short **FAudioPCMBuffer::uint16ChannelData()
 {
-    assert(_format.sampleType() == QAudioFormat::SampleType::UnSignedInt);
-    return (const uint16_t **)channelData;
+	return (unsigned short **)_channelData;
 }
 
-int FAudioPCMBuffer::bytesDataSize() const
+unsigned char ** FAudioPCMBuffer::channelData()
 {
-    return bytesPerSample() * _capacity;
+	return _channelData;
 }
 
-QString FAudioPCMBuffer::debugDescription() const 
+const float * const * FAudioPCMBuffer::immutableFloatChannelData() const
 {
-    QString address;
-    address.sprintf("%8p", this);
-    return QString("<%1>, start: %2, end: %3, capacity: %4").arg(address).arg(timeRange.start.debugDescription()).arg(timeRange.end.debugDescription()).arg(_capacity);
+	return (const float * const *)_channelData;
+}
+
+void FAudioPCMBuffer::setZero()
+{
+	bool isNonInterleaved = Bitmask::isContains(audioFormat().formatFlags, AudioFormatFlag::isNonInterleaved);
+
+	if (isNonInterleaved)
+	{
+		for (int i = 0; i < audioFormat().channelsPerFrame; i++)
+		{
+			memset(channelData()[i], 0, bytesDataSizePerChannel());
+		}
+	}
+	else
+	{
+		memset(channelData()[0], 0, bytesDataSizePerChannel());
+	}
+}
+
+unsigned int FAudioPCMBuffer::bytesDataSizePerChannel() const
+{
+	return _audioFormat.bytesPerFrame * _frameCapacity;
+}
+
+std::string FAudioPCMBuffer::debugDescription() const
+{
+	return "";
 }

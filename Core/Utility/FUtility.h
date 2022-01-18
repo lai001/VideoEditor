@@ -16,5 +16,4 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "ScopeGuard.h"
-#include "Thread.h"
 #include "Util.h"

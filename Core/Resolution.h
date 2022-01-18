@@ -18,28 +18,28 @@
 #ifndef RESOLUTION_H
 #define RESOLUTION_H
 
-#include <QSize>
+#include "Utility/FUtility.h"
 
-static const QSize KResolution480x640 = QSize(480, 640);
-static const QSize KResolution640x480 = QSize(640, 480);
+static const FSize KResolution480x640 = FSize(480, 640);
+static const FSize KResolution640x480 = FSize(640, 480);
 
-static const QSize KResolution800x600 = QSize(800, 600);
-static const QSize KResolution600x800 = QSize(600, 800);
+static const FSize KResolution800x600 = FSize(800, 600);
+static const FSize KResolution600x800 = FSize(600, 800);
 
-static const QSize KResolution720x1280 = QSize(720, 1280);
-static const QSize KResolution1280x720 = QSize(1280, 720);
+static const FSize KResolution720x1280 = FSize(720, 1280);
+static const FSize KResolution1280x720 = FSize(1280, 720);
 
-static const QSize KResolution1080x1920 = QSize(1080, 1920);
-static const QSize KResolution1920x1080 = QSize(1920, 1080);
+static const FSize KResolution1080x1920 = FSize(1080, 1920);
+static const FSize KResolution1920x1080 = FSize(1920, 1080);
 
-static const QSize KResolution2048x1080 = QSize(2048, 1080);
-static const QSize KResolution1998x1080 = QSize(1998, 1080);
-static const QSize KResolution2048x858 = QSize(2048, 858);
-static const QSize KResolution2560x1440 = QSize(2560, 1440);
-static const QSize KResolution2048x1536 = QSize(2048, 1536);
-static const QSize KResolution2560x1600 = QSize(2560, 1600);
+static const FSize KResolution2048x1080 = FSize(2048, 1080);
+static const FSize KResolution1998x1080 = FSize(1998, 1080);
+static const FSize KResolution2048x858 = FSize(2048, 858);
+static const FSize KResolution2560x1440 = FSize(2560, 1440);
+static const FSize KResolution2048x1536 = FSize(2048, 1536);
+static const FSize KResolution2560x1600 = FSize(2560, 1600);
 
-static const QSize KResolution4096x2160 = QSize(4096, 2160);
-static const QSize KResolution3840x2160 = QSize(3840, 2160);
+static const FSize KResolution4096x2160 = FSize(4096, 2160);
+static const FSize KResolution3840x2160 = FSize(3840, 2160);
 
 #endif // RESOLUTION_H

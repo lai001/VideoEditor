@@ -19,17 +19,19 @@
 #define FEXPORTSEESION_H
 
 #include "VideoDescription.h"
+#include "ImageCompositionPipeline.h"
 
 class FExportSession
 {
 public:
-    FExportSession(FVideoDescription *des);
-    ~FExportSession();
+	FExportSession(const FVideoDescription& videoDescription, FImageCompositionPipeline& imageCompositionPipeline);
+	~FExportSession();
 
-    void start(std::function<void(int)> completionCallback);
+	void start(const std::string& filename, std::function<void(const std::string& type, const FMediaTime& time)> progressCallback);
 
 private:
-    FVideoDescription *videoDescription = nullptr;
+	const FVideoDescription *videoDescription = nullptr;
+	FImageCompositionPipeline *imageCompositionPipeline = nullptr;
 };
 
 #endif // FEXPORTSEESION_H

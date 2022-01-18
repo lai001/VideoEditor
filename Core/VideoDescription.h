@@ -18,42 +18,40 @@
 #ifndef FVIDEODESCRIPTION_H
 #define FVIDEODESCRIPTION_H
 
-#include <QAudioFormat>
+#include <vector>
 
+#include "Track/FTrack.h"
+#include "AudioFormat.h"
 #include "Resolution.h"
-#include "ImageTrack.h"
 #include "VideoInstruction.h"
-#include "AudioTrack.h"
+#include "RenderContext.h"
 
 class FVideoDescription
 {
 public:
-    FVideoDescription();
-    ~FVideoDescription();
+	FVideoDescription();
+	~FVideoDescription();
 
-    QSize renderSize = KResolution720x1280;
-    float renderScale = 1.0;
-    float fps = 24.0;
+	FRenderContext renderContext;
 
-    void prepare();
+	void prepare();
 
-    static QVector<FMediaTimeRange> instructionTimeRanges(QVector<FMediaTimeRange>);
+	static std::vector<FMediaTimeRange> instructionTimeRanges(std::vector<FMediaTimeRange> timeRanges);
 
-    const FVideoInstruction *videoInstuction(const FMediaTime time) const;
+	bool videoInstuction(const FMediaTime time, FVideoInstruction& outVideoInstruction) const;
 
-    QVector<FImageTrack *> imageTracks;
-    QVector<FAudioTrack *> audioTracks;
+	std::vector<FImageTrack *> imageTracks;
+	std::vector<FAudioTrack *> audioTracks;
 
-    FMediaTime duration() const;
-    QAudioFormat audioFormat;
+	FMediaTime duration() const;
 
 protected:
-    QVector<FVideoInstruction *> videoInstructions;
+	std::vector<FVideoInstruction> videoInstructions;
 
 private:
-    void removeAllVideoInstuctions();
+	void removeAllVideoInstuctions();
 
-    FMediaTime _duration;
+	FMediaTime _duration;
 };
 
 #endif // FVIDEODESCRIPTION_H

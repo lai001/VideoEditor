@@ -18,34 +18,40 @@
 #ifndef AUDIOPCMBUFFER_H
 #define AUDIOPCMBUFFER_H
 
-#include "FTime.h"
-#include <QAudioFormat>
+#include <string>
+#include "Vendor/noncopyable.hpp"
+#include "AudioFormat.h"
+#include "Time/FTime.h"
 
-class FAudioPCMBuffer
+class FAudioPCMBuffer : public boost::noncopyable
 {
 private:
-    QAudioFormat _format;
-    int _capacity;
-    uint8_t** channelData = nullptr;
+	FAudioFormat _audioFormat;
+	unsigned int _frameCapacity;
+	unsigned char** _channelData = nullptr;
+
+protected:
+	FAudioPCMBuffer();
 
 public:
-    FAudioPCMBuffer(const QAudioFormat format, const int capacity);
-    FAudioPCMBuffer(const FAudioPCMBuffer& buffer);
-    FAudioPCMBuffer &operator=(const FAudioPCMBuffer &buffer);
-    ~FAudioPCMBuffer();
+	FAudioPCMBuffer(const FAudioFormat format, const unsigned int frameCapacity);
+	~FAudioPCMBuffer();
 
-    FMediaTimeRange timeRange;
+	FAudioFormat audioFormat() const;
+	unsigned int frameCapacity() const;
+	unsigned int bytesPerSample() const;
+	unsigned int bytesDataSizePerChannel() const;
 
-    QAudioFormat audioFormat() const;
-    int capacity() const;
-    uint bytesPerSample() const;
-    int bytesDataSize() const;
+	float **floatChannelData();
+	short **int16ChannelData();
+	unsigned short **uint16ChannelData();
+	unsigned char ** channelData();
 
-    const float **floatChannelData() const;
-    const int16_t **int16ChannelData() const;
-    const uint16_t **uint16ChannelData() const;
+	const float * const *immutableFloatChannelData() const;
 
-    QString debugDescription() const;
+	void setZero();
+
+	std::string debugDescription() const;
 };
 
 #endif // AUDIOPCMBUFFER_H

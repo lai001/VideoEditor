@@ -16,11 +16,13 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "AudioTrack.h"
-#include "VideoDescription.h"
+#include <assert.h>
+#include <algorithm>
+#include <iostream>
+#include "Utility/FUtility.h"
 
 FAudioTrack::FAudioTrack()
 {
-    audioBuffers = QVector<FAudioBuffer*>();
 }
 
 FAudioTrack::~FAudioTrack()
@@ -30,106 +32,141 @@ FAudioTrack::~FAudioTrack()
         delete decoder;
         decoder = nullptr;
     }
-    requestCleanAllCache();
+	flush();
 }
 
-void FAudioTrack::prepare(const FVideoDescription& videoDescription)
+void FAudioTrack::prepare(const FAudioRenderContext& renderContext)
 {
-    if (decoder)
-    {
-        delete decoder;
-        decoder = nullptr;
-    }
-    QAudioFormat format = videoDescription.audioFormat;
-    decoder = new FAudioDecoder(filePath, format);
-    audioFormat = format;
+	if (decoder)
+	{
+		delete decoder;
+		decoder = nullptr;
+	}
+	FAudioFormat format = renderContext.audioFormat;
+	decoder = FAudioDecoder::New(filePath, format);
+	assert(decoder != nullptr);
+	outputAudioFormat = format;
 }
 
-void FAudioTrack::requestCleanAllCache()
+void FAudioTrack::flush()
 {
-    QMutexLocker locker(&decoderMutex);
-    for (auto item : audioBuffers)
-    {
-        delete item;
-    }
-    audioBuffers.clear();
+	std::lock_guard<std::mutex> lock(decoderMutex);
+
+	for (AudioPCMBufferQueueItem item : bufferQueue)
+	{
+		delete item.pcmBuffer;
+	}
+	bufferQueue.clear();
+}
+
+void FAudioTrack::flush(const FMediaTime & time)
+{
+	std::lock_guard<std::mutex> lock(decoderMutex);
+
+	bufferQueue.erase(std::remove_if(bufferQueue.begin(), bufferQueue.end(), [&](AudioPCMBufferQueueItem queueItem) {
+		if (queueItem.timeRange.end < time)
+		{
+			delete queueItem.pcmBuffer;
+			return true;
+		}
+		else
+		{
+			return false;
+
+		}
+	}),
+		bufferQueue.end());
 }
 
 void FAudioTrack::onSeeking(const FMediaTime& time)
 {
+	flush();
     if (decoder)
     {
-        QMutexLocker locker(&decoderMutex);
+		std::lock_guard<std::mutex> lock(decoderMutex);
         decoder->seek(time);
     }
 }
 
-void FAudioTrack::samples(const FMediaTimeRange& timeRange, const int byteCount, uint8_t* buffer, const QAudioFormat& format)
+void FAudioTrack::samples(const FMediaTimeRange& timeRange, FAudioPCMBuffer* outAudioPCMBuffer)
 {
+	std::lock_guard<std::mutex> lock(decoderMutex);
 
-    QMutexLocker locker(&decoderMutex);
+	std::function<bool()> decodeNextFrame = [this]()
+	{
+		FMediaTimeRange outTimeRange;
+		FAudioPCMBuffer* outPcmBuffer = decoder->newFrame(outTimeRange);
+		if (outPcmBuffer)
+		{
+			AudioPCMBufferQueueItem item;
+			item.pcmBuffer = outPcmBuffer;
+			item.timeRange = outTimeRange;
+			bufferQueue.push_back(item);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	};
 
-    uint8_t* bufferArray = nullptr;
+	while (true)
+	{
+		if (bufferQueue.empty())
+		{
+			if (decodeNextFrame() == false)
+			{
+				break;
+			}
+		}
+		else
+		{
+			AudioPCMBufferQueueItem& backItem = bufferQueue.back();
+			if (backItem.timeRange.end < timeRange.end)
+			{
+				if (decodeNextFrame() == false)
+				{
+					break;
+				}
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
 
-    int bufferStart = 0;
-    int bufferEnd = 0;
+	bool isNonInterleaved = Bitmask::isContains(outputAudioFormat.formatFlags, AudioFormatFlag::isNonInterleaved);
 
-    const int start = timeRange.start.convertScale(format.sampleRate()).timeValue();
-    const int end = timeRange.end.convertScale(format.sampleRate()).timeValue();
+	for (const AudioPCMBufferQueueItem& item : bufferQueue)
+	{
+		FMediaTimeRange intersectionTimeRange = item.timeRange.intersection(timeRange);
+		int copyNum = intersectionTimeRange.end.timeValue() - intersectionTimeRange.start.timeValue();
 
-    while (true)
-    {
-        if (audioBuffers.isEmpty() == false)
-        {
-            bufferStart = audioBuffers.first()->timeRange.start.convertScale(format.sampleRate()).timeValue();
-            bufferEnd = audioBuffers.last()->timeRange.end.convertScale(format.sampleRate()).timeValue();
+		if (intersectionTimeRange.isEmpty())
+		{
+			continue;
+		}
 
-            if (bufferStart <= start && bufferEnd >= end)
-            {
-                int length = 0 ;
-                for (auto item : audioBuffers)
-                {
-                    length += item->byteCount;
-                }
-                bufferArray = new uint8_t[length];
-                int index = 0;
-                for (auto item : audioBuffers)
-                {
-                    memcpy(bufferArray + index, item->pcmBuffer, item->byteCount);
-                    index += item->byteCount;
-                }
-                const int sampleSize = format.sampleSize() / sizeof(uint8_t) / 8;
+		if (isNonInterleaved)
+		{
+			int dstOffset = (intersectionTimeRange.start - timeRange.start).timeValue();
+			int srcOffset = (intersectionTimeRange.start - item.timeRange.start).timeValue();
+			for (int i = 0; i < outputAudioFormat.channelsPerFrame; i++)
+			{
+				memcpy(outAudioPCMBuffer->channelData()[i] + dstOffset * outputAudioFormat.bytesPerFrame,
+					item.pcmBuffer->channelData()[i] + srcOffset * outputAudioFormat.bytesPerFrame,
+					outputAudioFormat.bytesPerFrame * copyNum);
+			}
+		}
+		else
+		{
+			int dstOffset = (intersectionTimeRange.start - timeRange.start).timeValue();
+			int srcOffset = (intersectionTimeRange.start - item.timeRange.start).timeValue();
+			memcpy(outAudioPCMBuffer->channelData()[0] + dstOffset * outputAudioFormat.bytesPerFrame,
+				item.pcmBuffer->channelData()[0] + srcOffset * outputAudioFormat.bytesPerFrame,
+				outputAudioFormat.bytesPerFrame * copyNum);
+		}
 
-                int offset = (start - bufferStart) * format.channelCount() * sampleSize;
-
-                if (offset < length)
-                {
-//                    qDebug() << "copy success" << offset << length;
-                    memcpy(buffer, bufferArray + offset, byteCount);
-                }
-                else
-                {
-                    qDebug() << "copy failed" << offset << length;
-                }
-
-                delete[] bufferArray;
-                break;
-            }
-            else
-            {
-                FAudioBuffer* audioBuffer = new FAudioBuffer();
-                int ret = decoder->frame(audioBuffer); // TODO:
-//                qDebug() << audioBuffers.size() << audioBuffer->timeRange.start.seconds();
-                audioBuffers.append(audioBuffer);
-            }
-        }
-        else
-        {
-            FAudioBuffer* audioBuffer = new FAudioBuffer();
-            int ret = decoder->frame(audioBuffer); // TODO:
-//            qDebug() << audioBuffers.size() << audioBuffer->timeRange.start.seconds();
-            audioBuffers.append(audioBuffer);
-        }
-    }
-
+	}
 }

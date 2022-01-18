@@ -17,29 +17,26 @@
 
 #include "ExportSession.h"
 
-#include <QtCore>
-#include <QApplication>
-#include <QFile>
-#include <QSize>
-#include <QImage>
-#include <QPainter>
 #include <functional>
-#include <QFile>
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
-#include "FTime.h"
-#include "ScopeGuard.h"
-#include "Vendor/FFmpeg.h"
-#include "Util.h"
+#include "ThirdParty/FFmpeg.h"
+#include "ThirdParty/spdlog.h"
 
-FExportSession::FExportSession(FVideoDescription *des)
-    :videoDescription(des)
+#include "Time/FTime.h"
+#include "Utility/FUtility.h"
+#include "Resolution.h"
+#include "AudioPCMBuffer.h"
+#include "PixelBufferPool.h"
+
+FExportSession::FExportSession(const FVideoDescription& videoDescription, FImageCompositionPipeline& imageCompositionPipeline)
+	: videoDescription(&videoDescription), imageCompositionPipeline(&imageCompositionPipeline)
 {
-    assert(des);
+
 }
 
 FExportSession::~FExportSession()
@@ -47,293 +44,323 @@ FExportSession::~FExportSession()
 
 }
 
-void FExportSession::start(std::function<void (int)> completionCallback)
+void FExportSession::start(const std::string& filename, std::function<void(const std::string& type, const FMediaTime& time)> progressCallback)
 {
+	bool isVideoEnable = true;
+	bool isAudioEnable = true;
 
-    const QSize renderSize = videoDescription->renderSize;
-    const float renderScale = videoDescription->renderScale;
+	const FVideoRenderContext videoRenderContext = videoDescription->renderContext.videoRenderContext;
+	const FAudioRenderContext audioRenderContext = videoDescription->renderContext.audioRenderContext;
 
-    const QString filename = QApplication::applicationDirPath().append("/output.mp4");
+	const FSize renderSize = videoRenderContext.renderSize;
+	const float renderScale = videoRenderContext.renderScale;
+	float fps = videoRenderContext.fps;
+	float audioSampleRate = audioRenderContext.audioFormat.sampleRate;
 
-    const AVOutputFormat *outputFormat;
-    AVFormatContext *outputFormatContext;
+	assert(audioRenderContext.audioFormat.isNonInterleaved());
 
-    const AVCodec *videoCodec;
-    AVStream *videoStream;
-    AVCodecContext *videoCodecContext;
-    struct SwsContext *videoSwsContext;
+	const AVOutputFormat *outputFormat;
+	AVFormatContext *outputFormatContext;
 
-    const AVCodec *audioCodec;
-    AVStream *audioStream;
-    AVCodecContext *audioCodecContext;
-    struct SwrContext *audioSwrContext;
+	const AVCodec *videoCodec;
+	AVStream *videoStream;
+	AVCodecContext *videoCodecContext;
+	struct SwsContext *videoSwsContext;
 
-    avformat_alloc_output_context2(&outputFormatContext, nullptr, nullptr, filename.toStdString().c_str());
-    outputFormat = outputFormatContext->oformat;
+	const AVCodec *audioCodec;
+	AVStream *audioStream;
+	AVCodecContext *audioCodecContext;
+	struct SwrContext *audioSwrContext;
 
-    videoCodec = avcodec_find_encoder(outputFormat->video_codec);
-    videoStream = avformat_new_stream(outputFormatContext, videoCodec);
-    videoCodecContext = avcodec_alloc_context3(videoCodec);
+	avformat_alloc_output_context2(&outputFormatContext, nullptr, nullptr, filename.c_str());
+	outputFormat = outputFormatContext->oformat;
 
-    audioCodec = avcodec_find_encoder(outputFormat->audio_codec);
-    audioStream = avformat_new_stream(outputFormatContext, audioCodec);
-    audioCodecContext = avcodec_alloc_context3(audioCodec);
+	videoCodec = avcodec_find_encoder(outputFormat->video_codec);
+	videoStream = avformat_new_stream(outputFormatContext, videoCodec);
+	videoCodecContext = avcodec_alloc_context3(videoCodec);
 
-    videoCodecContext->bit_rate = 40000000;
-    videoCodecContext->width = renderSize.width() * renderScale;
-    videoCodecContext->height = renderSize.height() * renderScale;
-    videoCodecContext->framerate = FMediaTime(videoDescription->fps, 600).getRational();
-    videoCodecContext->time_base = FMediaTime(videoDescription->fps, 600).invert().getRational();
-    videoStream->time_base = videoCodecContext->time_base;
-    videoCodecContext->gop_size = 1;
-    videoCodecContext->pix_fmt = AV_PIX_FMT_YUV420P;
-    if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
-        videoCodecContext->max_b_frames = 2;
-    }
-    if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG1VIDEO) {
-        videoCodecContext->mb_decision = 2;
-    }
-    if (outputFormat->flags & AVFMT_GLOBALHEADER)
-    {
-        videoCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    }
+	audioCodec = avcodec_find_encoder(outputFormat->audio_codec);
+	audioStream = avformat_new_stream(outputFormatContext, audioCodec);
+	audioCodecContext = avcodec_alloc_context3(audioCodec);
 
-    audioCodecContext->sample_fmt = audioCodec->sample_fmts ? audioCodec->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-    audioCodecContext->bit_rate = 64000;
-    audioCodecContext->sample_rate = 44100;
-    audioCodecContext->channel_layout = AV_CH_LAYOUT_STEREO;
-    audioCodecContext->channels = av_get_channel_layout_nb_channels(audioCodecContext->channel_layout);
-    audioCodecContext->time_base = FMediaTime(1, audioCodecContext->sample_rate).getRational();
-    audioStream->time_base = audioCodecContext->time_base;
-    if (outputFormat->flags & AVFMT_GLOBALHEADER)
-    {
-        audioCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    }
+	videoCodecContext->bit_rate = 40000000;
+	videoCodecContext->width = renderSize.width * renderScale;
+	videoCodecContext->height = renderSize.height * renderScale;
+	videoCodecContext->framerate = FMediaTime(fps, 600).getRational();
+	videoCodecContext->time_base = FMediaTime(fps, 600).invert().getRational();
+	videoStream->time_base = videoCodecContext->time_base;
+	videoCodecContext->gop_size = 1;
+	videoCodecContext->pix_fmt = AV_PIX_FMT_YUV420P;
+	if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
+		videoCodecContext->max_b_frames = 2;
+	}
+	if (videoCodecContext->codec_id == AV_CODEC_ID_MPEG1VIDEO) {
+		videoCodecContext->mb_decision = 2;
+	}
+	if (outputFormat->flags & AVFMT_GLOBALHEADER)
+	{
+		videoCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	}
 
-    avcodec_open2(videoCodecContext, videoCodec, nullptr);
-    avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
+	const AVSampleFormat targetSampleFormat = FUtil::getAVSampleFormat(audioRenderContext.audioFormat);
 
-    avcodec_open2(audioCodecContext, audioCodec, nullptr);
-    avcodec_parameters_from_context(audioStream->codecpar, audioCodecContext);
+	audioCodecContext->sample_fmt = targetSampleFormat;//audioCodec->sample_fmts ? audioCodec->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
+	audioCodecContext->bit_rate = 64000;
+	audioCodecContext->sample_rate = audioSampleRate;
+	audioCodecContext->channel_layout = av_get_default_channel_layout(audioRenderContext.audioFormat.channelsPerFrame);//AV_CH_LAYOUT_STEREO;
+	audioCodecContext->channels = av_get_channel_layout_nb_channels(audioCodecContext->channel_layout);
+	audioCodecContext->time_base = FMediaTime(1, audioCodecContext->sample_rate).getRational();
+	audioStream->time_base = audioCodecContext->time_base;
+	if (outputFormat->flags & AVFMT_GLOBALHEADER)
+	{
+		audioCodecContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	}
 
-    audioSwrContext = swr_alloc_set_opts(nullptr,
-                                         audioCodecContext->channel_layout, audioCodecContext->sample_fmt, audioCodecContext->sample_rate,
-                                         AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, 44100,
-                                         0, nullptr);
-    swr_init(audioSwrContext);
+	avcodec_open2(videoCodecContext, videoCodec, nullptr);
+	avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
 
-    videoSwsContext = sws_getContext(videoCodecContext->width, videoCodecContext->height, AV_PIX_FMT_RGBA,
-                                     videoCodecContext->width, videoCodecContext->height, AV_PIX_FMT_YUV420P,
-                                     SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
+	avcodec_open2(audioCodecContext, audioCodec, nullptr);
+	avcodec_parameters_from_context(audioStream->codecpar, audioCodecContext);
 
-//    av_dump_format(outputFormatContext, 0, filename.toStdString().c_str(), 1);
+	audioSwrContext = swr_alloc_set_opts(nullptr,
+		audioCodecContext->channel_layout, targetSampleFormat, audioSampleRate,
+		audioCodecContext->channel_layout, targetSampleFormat, audioSampleRate,
+		0, nullptr);
+	swr_init(audioSwrContext);
 
+	videoSwsContext = sws_getContext(videoCodecContext->width, videoCodecContext->height, AV_PIX_FMT_RGBA,
+		videoCodecContext->width, videoCodecContext->height, AV_PIX_FMT_YUV420P,
+		SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
-    if (!(outputFormat->flags & AVFMT_NOFILE)) {
-        avio_open(&outputFormatContext->pb, filename.toStdString().c_str(), AVIO_FLAG_WRITE);
-    }
-    avformat_write_header(outputFormatContext, nullptr);
+	//    av_dump_format(outputFormatContext, 0, filename.toStdString().c_str(), 1);
 
-    std::function<int(AVFrame *, AVCodecContext *, AVStream *)> encodeFrame = [outputFormatContext](AVFrame *frame, AVCodecContext *codecContext, AVStream *steam)
-    {
-        int ret = 0;
-        ret = avcodec_send_frame(codecContext, frame);
-        if (ret < 0)
-        {
-            qDebug() << "Error sending a frame for encoding: " << FUtil::ffmpegErrorDescription(ret);
-            assert(false);
-        }
+	if (!(outputFormat->flags & AVFMT_NOFILE)) {
+		avio_open(&outputFormatContext->pb, filename.c_str(), AVIO_FLAG_WRITE);
+	}
+	avformat_write_header(outputFormatContext, nullptr);
 
-        while (ret >= 0)
-        {
-            AVPacket pkt = {0};
-            ret = avcodec_receive_packet(codecContext, &pkt);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            {
-                break;
-            }
-            else if (ret < 0)
-            {
-                qDebug() << "Error during encoding: " << FUtil::ffmpegErrorDescription(ret);
-                assert(false);
-            }
+	std::function<int(AVFrame *, AVCodecContext *, AVStream *)> encodeFrame = [outputFormatContext](AVFrame *frame, AVCodecContext *codecContext, AVStream *steam)
+	{
+		int ret = 0;
+		ret = avcodec_send_frame(codecContext, frame);
+		if (ret < 0)
+		{
+			spdlog::error(FUtil::ffmpegErrorDescription(ret));
+			assert(false);
+		}
 
-            av_packet_rescale_ts(&pkt, codecContext->time_base, steam->time_base);
+		while (ret >= 0)
+		{
+			AVPacket pkt = { 0 };
+			ret = avcodec_receive_packet(codecContext, &pkt);
+			if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+			{
+				break;
+			}
+			else if (ret < 0)
+			{
+				assert(false);
+			}
 
-            pkt.stream_index = steam->index;
-            av_interleaved_write_frame(outputFormatContext, &pkt);
-            av_packet_unref(&pkt);
-        }
-        return ret;
-    };
+			av_packet_rescale_ts(&pkt, codecContext->time_base, steam->time_base);
 
-    {
-        AVFrame *frame = av_frame_alloc();
-        frame->format = videoCodecContext->pix_fmt;
-        frame->width = videoCodecContext->width;
-        frame->height = videoCodecContext->height;
-        av_frame_get_buffer(frame, 0);
-        FMediaTime decodeImageTime = FMediaTime(0, videoCodecContext->time_base.den);
+			pkt.stream_index = steam->index;
+			av_interleaved_write_frame(outputFormatContext, &pkt);
+			av_packet_unref(&pkt);
+		}
+		return ret;
+	};
 
-        while (1)
-        {
-            if (decodeImageTime.seconds() >= videoDescription->duration().seconds())
-            {
-                break;
-            }
+	{
+		AVFrame *frame = av_frame_alloc();
+		frame->format = videoCodecContext->pix_fmt;
+		frame->width = videoCodecContext->width;
+		frame->height = videoCodecContext->height;
+		av_frame_get_buffer(frame, 0);
+		FMediaTime decodeImageTime = FMediaTime(0, videoCodecContext->time_base.den);
 
-            const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeImageTime);
-            defer
-            {
-                decodeImageTime = decodeImageTime + FMediaTime(1.0 / videoDescription->fps, videoCodecContext->time_base.den);
-                decodeImageTime = decodeImageTime.convertScale(videoCodecContext->time_base.den);
-                qDebug() << "Video: " << decodeImageTime.seconds();
-            };
+		const unsigned int poolWidth = renderSize.width * renderScale;
+		const unsigned int poolHeight = renderSize.height * renderScale;
 
-            QImage *outputImage = new QImage(renderSize, QImage::Format_RGBA8888);
-            QPainter *painter = new QPainter(outputImage);
-            defer
-            {
-                delete painter;
-                painter = nullptr;
+		FPixelBufferPool* pixelBufferPool = new FPixelBufferPool(poolWidth, poolHeight, 5, videoRenderContext.format);
+		defer
+		{
+			delete pixelBufferPool;
+		};
 
-                delete outputImage;
-                outputImage = nullptr;
-            };
+		while (isVideoEnable)
+		{
+			if (decodeImageTime.seconds() >= videoDescription->duration().seconds())
+			{
+				break;
+			}
+			progressCallback("video", decodeImageTime);
+			FVideoInstruction videoInstuction;
+			if (videoDescription->videoInstuction(decodeImageTime, videoInstuction) == false)
+			{
+				break;
+			}
+			defer
+			{
+				decodeImageTime = decodeImageTime + FMediaTime(1.0 / fps, videoCodecContext->time_base.den);
+				decodeImageTime = decodeImageTime.convertScale(videoCodecContext->time_base.den);
+			};
 
-            int index = 0;
-            for (FImageTrack *imageTrack : videoInstuction->imageTracks)
-            {
-                const FImage *image = imageTrack->sourceFrame(decodeImageTime, renderSize, renderScale);
-                if (index == 0)
-                {
-                    painter->drawImage(QRect(0, 0, renderSize.width() / 2, renderSize.height() / 2),
-                                       *image->image(),
-                                       QRect(0, 0, image->image()->size().width(), image->image()->size().height()));
-                }
-                else
-                {
-                    painter->drawImage(QRect(renderSize.width() / 2, renderSize.height() / 2, renderSize.width() / 2, renderSize.height() / 2),
-                                       *image->image(),
-                                       QRect(0, 0, image->image()->size().width(), image->image()->size().height()));
-                }
-                index++;
-            }
+			FAsyncImageCompositionRequest request;
+			request.instruction = videoInstuction;
+			request.videoRenderContext = &videoRenderContext;
 
-            int rgblinesizes[4];
-            av_image_fill_linesizes(rgblinesizes, AV_PIX_FMT_RGBA, outputImage->width());
+			for (FImageTrack *imageTrack : videoInstuction.imageTracks)
+			{
+				imageTrack->flush(decodeImageTime);
+				const FPixelBuffer *sourceFrame = imageTrack->sourceFrame(decodeImageTime, videoDescription->renderContext.videoRenderContext);
+				request.sourceFrames[imageTrack->trackID] = sourceFrame;
+			}
 
-            uint8_t *src[1] = {outputImage->bits()};
+			imageCompositionPipeline->composition(request, [pixelBufferPool]()
+			{
+				return pixelBufferPool->pixelBuffer();
+			});
 
-            sws_scale(videoSwsContext, src,
-                      rgblinesizes, 0, outputImage->height(),
-                      frame->data, frame->linesize);
+			int rgblinesizes[4];
+			av_image_fill_linesizes(rgblinesizes, AV_PIX_FMT_RGBA, request.pixelBuffer->width());
 
-            frame->pts = decodeImageTime.timeValue();
+			sws_scale(videoSwsContext, &request.pixelBuffer->data()[0],
+				rgblinesizes, 0, request.pixelBuffer->height(),
+				frame->data, frame->linesize);
 
-            encodeFrame(frame, videoCodecContext, videoStream);
+			frame->pts = decodeImageTime.timeValue();
 
-            for (auto imageTrack : videoDescription->imageTracks)
-            {
-                FMediaTimeRange cleanTimeRange = FMediaTimeRange(FMediaTime::zero, decodeImageTime);
-                imageTrack->requestCleanCache(cleanTimeRange);
-            }
-        }
+			encodeFrame(frame, videoCodecContext, videoStream);
+		}
 
-        encodeFrame(nullptr, videoCodecContext, videoStream);
+		encodeFrame(nullptr, videoCodecContext, videoStream);
 
-        av_frame_unref(frame);
-        av_frame_free(&frame);
-    }
+		av_frame_unref(frame);
+		av_frame_free(&frame);
+	}
 
-    {
-        AVFrame *frame = av_frame_alloc();
-        frame->format = audioCodecContext->sample_fmt;
-        frame->channel_layout = audioCodecContext->channel_layout;
-//        frame->channels = audioCodecContext->channels;
-        frame->sample_rate = audioCodecContext->sample_rate;
-        frame->nb_samples = audioCodecContext->frame_size == 0 ? 1024 : audioCodecContext->frame_size;
-        av_frame_get_buffer(frame, 0);
-        int ret;
-        int pts = 0;
-        int nextPts = 0;
-        int dst_nb_samples = 0;
-        FMediaTime decodeAudioTime = FMediaTime(0, 44100);
-        const int sampleSize = videoDescription->audioFormat.sampleSize() / sizeof(uint8_t) / 8;
-        int outputBufferSize = frame->nb_samples * sampleSize * audioCodecContext->channels;
-        uint8_t* outputBuffer = new uint8_t[outputBufferSize];
-        int samples_count = 0;
+	{
+		AVFrame *frame = av_frame_alloc();
+		frame->format = audioCodecContext->sample_fmt;
+		frame->channel_layout = audioCodecContext->channel_layout;
+		frame->sample_rate = audioCodecContext->sample_rate;
+		frame->nb_samples = audioCodecContext->frame_size == 0 ? 1024 : audioCodecContext->frame_size;
+		frame->pts = 0;
+		av_frame_get_buffer(frame, 0);
+		int ret;
+		FMediaTime decodeAudioTime = FMediaTime(0, audioSampleRate);
 
-        defer {
-            delete[] outputBuffer;
-            outputBuffer = nullptr;
-        };
+		FAudioPCMBuffer* outputBuffer = new FAudioPCMBuffer(audioRenderContext.audioFormat, frame->nb_samples);
 
-        while (1)
-        {
-            if (decodeAudioTime.seconds() >= videoDescription->duration().seconds())
-            {
-                break;
-            }
+		defer
+		{
+			delete outputBuffer;
+		};
 
-            memset(outputBuffer, 0, outputBufferSize);
+		while (isAudioEnable)
+		{
+			if (decodeAudioTime.seconds() >= videoDescription->duration().seconds())
+			{
+				break;
+			}
+			progressCallback("audio", decodeAudioTime);
 
-            dst_nb_samples = av_rescale_rnd(swr_get_delay(audioSwrContext, audioCodecContext->sample_rate) + frame->nb_samples,
-                                            audioCodecContext->sample_rate, audioCodecContext->sample_rate, AV_ROUND_UP);
+			if (outputBuffer->audioFormat().isNonInterleaved())
+			{
+				for (int i = 0; i < outputBuffer->audioFormat().channelsPerFrame; i++)
+				{
+					memset(outputBuffer->channelData()[i], 0, outputBuffer->bytesDataSizePerChannel());
+				}
+			}
+			else
+			{
+				memset(outputBuffer->channelData()[0], 0, outputBuffer->bytesDataSizePerChannel());
+			}
 
-            FMediaTime duration = FMediaTime(frame->nb_samples, videoDescription->audioFormat.sampleRate());
-            const FVideoInstruction *videoInstuction = videoDescription->videoInstuction(decodeAudioTime);
+			const FMediaTime duration = FMediaTime(frame->nb_samples, videoDescription->renderContext.audioRenderContext.audioFormat.sampleRate);
+			FVideoInstruction videoInstuction;
+			if (videoDescription->videoInstuction(decodeAudioTime, videoInstuction) == false)
+			{
+				break;
+			}
 
-            uint8_t* buffer = new uint8_t[outputBufferSize];
-            defer {
-                delete[] buffer;
-                buffer = nullptr;
-            };
-            FMediaTimeRange timeRange = FMediaTimeRange(decodeAudioTime, decodeAudioTime + duration);
-//                qDebug() << timeRange.debugDescription();
-            for (FAudioTrack* audioTrack : videoInstuction->audioTracks)
-            {
-                memset(buffer, 0, outputBufferSize);
-                audioTrack->samples(timeRange, outputBufferSize, buffer, videoDescription->audioFormat);
-                for (int i = 0; i < outputBufferSize / sampleSize; i++)
-                {
-                    ((short*)outputBuffer)[i] = (((short*)outputBuffer)[i] + ((short*)buffer)[i]) / videoInstuction->audioTracks.size();
-                }
-            }
+			FAudioPCMBuffer* buffer = new FAudioPCMBuffer(audioRenderContext.audioFormat, frame->nb_samples);
+			defer
+			{
+				delete buffer;
+			};
+			FMediaTimeRange timeRange = FMediaTimeRange(decodeAudioTime, FMediaTime(decodeAudioTime.timeValue() + duration.timeValue(), audioSampleRate));
+			for (FAudioTrack* audioTrack : videoInstuction.audioTracks)
+			{
+				audioTrack->flush(decodeAudioTime);
+				bool isNonInterleaved = Bitmask::isContains(buffer->audioFormat().formatFlags, AudioFormatFlag::isNonInterleaved);
 
-            const uint8_t* buffer1dsa[1] = {outputBuffer};
+				if (isNonInterleaved)
+				{
+					for (int i = 0; i < buffer->audioFormat().channelsPerFrame; i++)
+					{
+						memset(buffer->channelData()[i], 0, buffer->bytesDataSizePerChannel());
+					}
+				}
+				else
+				{
+					memset(buffer->channelData()[0], 0, buffer->bytesDataSizePerChannel());
+				}
 
-            swr_convert(audioSwrContext,
-                        frame->data, dst_nb_samples,
-                        buffer1dsa, frame->nb_samples);
-            frame->pts = av_rescale_q(samples_count, (AVRational){1, audioCodecContext->sample_rate}, audioCodecContext->time_base);
-            frame->pts = nextPts;
-            nextPts = frame->pts + frame->nb_samples;
-            samples_count += dst_nb_samples;
-//            qDebug() << dst_nb_samples << duration.timeValue() << duration.timeScale() << frame->nb_samples;
+				audioTrack->samples(timeRange, buffer);
 
-            encodeFrame(frame, audioCodecContext, audioStream);
+				if (isNonInterleaved)
+				{
+					for (int i = 0; i < buffer->audioFormat().channelsPerFrame; i++)
+					{
+						float* dst = outputBuffer->floatChannelData()[i];
+						float* src = buffer->floatChannelData()[i];
 
-            decodeAudioTime = decodeAudioTime + duration;
-            qDebug() << "audio " << decodeAudioTime.seconds();
-        }
-        encodeFrame(nullptr, audioCodecContext, audioStream);
-        av_frame_unref(frame);
-        av_frame_free(&frame);
-    }
+						for (int j = 0; j < frame->nb_samples; j++)
+						{
+							dst[j] += src[j] / videoInstuction.audioTracks.size();
+						}
+					}
+				}
+				else
+				{
+					float* dst = outputBuffer->floatChannelData()[0];
+					float* src = buffer->floatChannelData()[0];
 
-    av_write_trailer(outputFormatContext);
+					for (int j = 0; j < frame->nb_samples * buffer->audioFormat().channelsPerFrame; j++)
+					{
+						dst[j] += src[j] / videoInstuction.audioTracks.size();
+					}
+				}
+			}
 
-    swr_close(audioSwrContext);
-    avcodec_free_context(&videoCodecContext);
-    avcodec_free_context(&audioCodecContext);
-    sws_freeContext(videoSwsContext);
-    swr_free(&audioSwrContext);
+			unsigned char ** inData = outputBuffer->channelData();
+			int convertRet = swr_convert(audioSwrContext,
+								frame->data, frame->nb_samples,
+								const_cast<const uint8_t**>(inData), frame->nb_samples);
+			assert(convertRet >= 0);
 
-    if (!(outputFormat->flags & AVFMT_NOFILE))
-        avio_closep(&outputFormatContext->pb);
+			encodeFrame(frame, audioCodecContext, audioStream);
+			frame->pts = frame->pts + frame->nb_samples;
+			decodeAudioTime = FMediaTime(decodeAudioTime.timeValue() + duration.timeValue(), audioSampleRate);
+		}
+		encodeFrame(nullptr, audioCodecContext, audioStream);
+		av_frame_unref(frame);
+		av_frame_free(&frame);
+	}
 
-    avformat_free_context(outputFormatContext);
+	av_write_trailer(outputFormatContext);
 
-    completionCallback(0);
+	swr_close(audioSwrContext);
+	avcodec_free_context(&videoCodecContext);
+	avcodec_free_context(&audioCodecContext);
+	sws_freeContext(videoSwsContext);
+	swr_free(&audioSwrContext);
+
+	if (!(outputFormat->flags & AVFMT_NOFILE))
+		avio_closep(&outputFormatContext->pb);
+
+	avformat_free_context(outputFormatContext);
+
 }

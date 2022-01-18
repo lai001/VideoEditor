@@ -18,30 +18,26 @@
 #ifndef FIMAGETRACK_H
 #define FIMAGETRACK_H
 
-#include <QString>
-#include "Image.h"
-#include "FTime.h"
+#include <string>
+#include "Time/FTime.h"
+#include "MediaTrack.h"
+#include "RenderContext.h"
+#include "PixelBuffer.h"
 
-class FVideoDescription;
-
-class FImageTrack
+class FImageTrack: public IMediaTrack
 {
 public:
-    virtual ~FImageTrack() = 0;
+	virtual ~FImageTrack() 
+	{
+	};
 
 public:
-    FMediaTimeMapping timeMapping;
-    QString filePath;
-
-    virtual const FImage *sourceFrame(FMediaTime time, QSize renderSize, float renderScale) = 0;
-    virtual FImage *compositionImage(const FImage *sourceFrame, const FMediaTime compositionTime, const QSize renderSize, const float renderScale) = 0;
-
-    virtual void prepare(const FVideoDescription& videoDescription) = 0;
-    virtual void didReloadFrame(const FVideoDescription& videoDescription) = 0;
-
-    virtual void requestCleanCache(const FMediaTimeRange timeRange) = 0;
-    virtual void requestCleanAllCache() = 0;
-    virtual void onSeeking(const FMediaTime time) = 0;
+    virtual const FPixelBuffer *sourceFrame(const FMediaTime& compositionTime, const FVideoRenderContext& renderContext) = 0;
+    virtual const FPixelBuffer *compositionImage(const FPixelBuffer& sourceFrame, const FMediaTime& compositionTime, const FVideoRenderContext& renderContext) = 0;
+    virtual void prepare(const FVideoRenderContext& renderContext) = 0;
+    virtual void onSeeking(const FMediaTime& compositionTime) = 0;
+	virtual void flush(const FMediaTime& compositionTime) = 0;
+	virtual void flush() = 0;
 };
 
 #endif // FIMAGETRACK_H

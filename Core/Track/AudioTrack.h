@@ -18,42 +18,45 @@
 #ifndef FAUDIOTRACK_H
 #define FAUDIOTRACK_H
 
-#include <QMutex>
-#include <QAudioFormat>
-#include <QVector>
+#include <mutex> 
+#include <vector>
+#include <string>
 
-#include "FTime.h"
+#include "Time/FTime.h"
+#include "AudioFormat.h"
 #include "AudioDecoder.h"
-#include "AudioBuffer.h"
+#include "AudioPCMBuffer.h"
+#include "RenderContext.h"
+#include "MediaTrack.h"
 
-class FVideoDescription;
+struct AudioPCMBufferQueueItem
+{
+	FMediaTimeRange timeRange;
+	FAudioPCMBuffer* pcmBuffer = nullptr;
+};
 
-class FAudioTrack
+class FAudioTrack : public IMediaTrack
 {
 public:
-    FAudioTrack();
-    ~FAudioTrack();
+	FAudioTrack();
+	~FAudioTrack();
 
 public:
-    FMediaTimeMapping timeMapping;
-    QString filePath;
-    void prepare(const FVideoDescription& videoDescription);
-    void didReloadFrame(const FVideoDescription& videoDescription);
+	std::string filePath;
 
-    void requestCleanCache(const FMediaTimeRange& timeRange);
-    void requestCleanAllCache();
-    void onSeeking(const FMediaTime& time);
-
-    void samples(const FMediaTimeRange& timeRange, const int byteCount, uint8_t* buffer, const QAudioFormat& format);
+public:
+	virtual void prepare(const FAudioRenderContext& renderContext);
+	virtual void flush();
+	virtual void flush(const FMediaTime& time);
+	virtual void onSeeking(const FMediaTime& time);
+	virtual void samples(const FMediaTimeRange& timeRange, FAudioPCMBuffer* outAudioPCMBuffer);
 
 private:
-    FAudioDecoder* decoder = nullptr;
-    QAudioFormat audioFormat;
-
-    QVector<FAudioBuffer*> audioBuffers;
-
-private:
-     QMutex decoderMutex;
+	std::vector<AudioPCMBufferQueueItem> bufferQueue;
+	FAudioDecoder* decoder = nullptr;
+	FAudioFormat outputAudioFormat;
+	FMediaTime time;
+	std::mutex decoderMutex;
 };
 
 #endif // FAUDIOTRACK_H

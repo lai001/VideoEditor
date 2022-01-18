@@ -16,6 +16,7 @@
 // along with VideoEditor.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "MediaTimeRange.h"
+#include "Utility/FUtility.h"
 
 FMediaTimeRange::FMediaTimeRange()
     : start(FMediaTime()), end(FMediaTime())
@@ -40,8 +41,8 @@ bool FMediaTimeRange::isEmpty() const
 
 FMediaTimeRange FMediaTimeRange::intersection(const FMediaTimeRange otherTimeRange) const
 {
-    FMediaTime _start = qMax(start, otherTimeRange.start);
-    FMediaTime end = qMin(end, otherTimeRange.end);
+    FMediaTime _start = std::max(this->start, otherTimeRange.start);
+    FMediaTime end = std::min(this->end, otherTimeRange.end);
     if (_start < end)
     {
         return FMediaTimeRange(_start, end);
@@ -64,9 +65,14 @@ bool FMediaTimeRange::containsTime(const FMediaTime time) const
     }
 }
 
-QString FMediaTimeRange::debugDescription() const
+FMediaTime FMediaTimeRange::clamp(const FMediaTime & time) const
 {
-    QString t;
-    t.sprintf("%8p", this);
-    return QString("<%1>, start: %2, end: %3").arg(t).arg(start.debugDescription()).arg(end.debugDescription());
+	return std::max(std::min(time, (*this).end), (*this).start);
 }
+
+std::string FMediaTimeRange::debugDescription() const
+{
+	return "";
+}
+
+FMediaTimeRange FMediaTimeRange::zero = FMediaTimeRange(FMediaTime::zero, FMediaTime::zero);
