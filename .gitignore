@@ -89,3 +89,5 @@ Resources
 build
 .vscode
 Scripts/.idea
+.xmake
+vsxmake*

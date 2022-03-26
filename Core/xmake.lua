@@ -1,0 +1,16 @@
+set_xmakever("2.6.3")
+
+add_requires("rapidjson")
+add_requires("spdlog")
+
+target("Core")
+    set_kind("static")
+    set_languages("cxx11")
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    add_includedirs("../")
+    add_includedirs("./")
+    add_includedirs("../Vendor/win32/ffmpeg/include")
+    add_rules("mode.debug", "mode.release")
+    add_packages("rapidjson")
+    add_packages("spdlog")

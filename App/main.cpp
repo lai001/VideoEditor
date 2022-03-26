@@ -27,7 +27,7 @@ extern "C"
 
 #include "Core/FVideoEditor.h"
 #include "spdlog/spdlog.h"
-#include "GLKit.h"
+#include "GLKit/GLKit.h"
 
 #include "imgui.h"
 
