@@ -53,8 +53,13 @@ rule("Supportimgui")
 
 rule("Supportlibsdl")
     after_build(function (target)
-        local DLLPath = target:pkgs()["libsdl"]["_INFO"]["envs"]["PATH"][1]
-        os.cp(path.join(DLLPath, "SDL2.dll"), path.join(target:targetdir(), "SDL2.dll"))
+        local libsdl_pkg = target:pkgs()["libsdl"]
+        local libfiles = libsdl_pkg:get("libfiles")
+        for index, file in pairs(libfiles) do
+            if path.extension(file) == ".dll" then
+                os.cp(file, path.join(target:targetdir(), path.filename(file)))
+            end
+        end
     end)
 
 target("App")
