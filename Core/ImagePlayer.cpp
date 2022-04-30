@@ -139,6 +139,13 @@ void FImagePlayer::openDecodeImageThread()
 				condition1 = frontRequest.compositionTime + FMediaTime(fps.seconds() * (double)cacheSize, timeScale) < currentTime;
 				isTracing = condition0 || condition1;
 			}
+			else
+			{
+				if (currentTime < compositionTime)
+				{
+					isTracing = true;
+				}
+			}
 			requestsMutex.unlock();
 
 			if (isTracing)
@@ -148,14 +155,19 @@ void FImagePlayer::openDecodeImageThread()
 				requests.clear();
 				requestsMutex.unlock();
 
-				FVideoInstruction videoInstuction;
-				if (videoDescription->videoInstuction(compositionTime, videoInstuction))
+				for (FImageTrack * imageTrack : videoDescription->imageTracks)
 				{
-					for (FImageTrack *imageTrack : videoInstuction.imageTracks)
-					{
-						imageTrack->onSeeking(compositionTime);
-					}
+					imageTrack->onSeeking(compositionTime);
 				}
+
+				//FVideoInstruction videoInstuction;
+				//if (videoDescription->videoInstuction(compositionTime, videoInstuction))
+				//{
+				//	for (FImageTrack *imageTrack : videoInstuction.imageTracks)
+				//	{
+				//		imageTrack->onSeeking(compositionTime);
+				//	}
+				//}
 			}
 			else
 			{
@@ -212,6 +224,12 @@ void FImagePlayer::openDecodeImageThread()
 
 			compositionTime = FMediaTime(compositionTime.timeValue() + fps.timeValue(), timeScale);
 			compositionTime = FMediaTimeRange(FMediaTime::zero, getVideoDuration()).clamp(compositionTime);
+
+			if (compositionTime >= getVideoDuration())
+			{
+				setIsDecodeImageThreadWaiting(true);
+				semaphore->wait();
+			}
 		}
 	}).detach();
 }

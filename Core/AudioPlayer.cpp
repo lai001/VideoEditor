@@ -18,7 +18,8 @@
 #include "AudioPlayer.h"
 #include "ThirdParty/spdlog.h"
 
-FAudioPlayer::FAudioPlayer()
+FAudioPlayer::FAudioPlayer(const int samples)
+	:samples(samples)
 {
 	semaphore = new FSemaphore(0);
 }
@@ -223,7 +224,7 @@ FMediaTime FAudioPlayer::round(const FMediaTime & time, const FMediaTime & durat
 {
 	assert(duration.seconds() > 0.0);
 	assert(time.timeScale() == duration.timeScale());
-	int num = (int)floor((time / duration).seconds());
+	int num = time.timeValue() / duration.timeValue();// (int)floor((time / duration).seconds());
 	int timeValue = num * duration.timeValue();
 	return FMediaTime(timeValue, audioRenderContext.audioFormat.sampleRate);
 }
@@ -261,6 +262,13 @@ void FAudioPlayer::openDecodeAudioThread()
 				condition0 = currentTime < frontRequest.compositionTimeRange.start;
 				condition1 = frontRequest.compositionTimeRange.start + FMediaTime(duration.seconds() * (double)cacheSize, duration.timeScale()) < currentTime;
 				isTracing = condition0 || condition1;
+			}
+			else
+			{
+				if (currentTime + duration < compositionTime)
+				{
+					isTracing = true;
+				}
 			}
 			buffersMutex.unlock();
 
@@ -334,8 +342,10 @@ void FAudioPlayer::openDecodeAudioThread()
 				buffers.push_back(request);
 				buffersMutex.unlock();
 			}
-			else
+			else if (compositionTime >= getAudioDuration())
 			{
+				setIsDecodeAudioThreadWaiting(true);
+				semaphore->wait();
 				continue; // TODO:
 			}
 			compositionTime = FMediaTime(compositionTime.timeValue() + samples, (int)audioRenderContext.audioFormat.sampleRate);

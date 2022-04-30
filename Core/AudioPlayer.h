@@ -42,7 +42,7 @@ struct FAudioCompositionRequest
 class FAudioPlayer : public boost::noncopyable
 {
 public:
-	FAudioPlayer();
+	FAudioPlayer(const int samples = 1024);
 	~FAudioPlayer();
 
 public:

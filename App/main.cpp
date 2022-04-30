@@ -19,6 +19,8 @@
 #include <iostream>
 #include <algorithm>
 #include <fstream>
+#include <memory>
+#include <assert.h>
 
 extern "C"
 {
@@ -146,27 +148,23 @@ void imaguiTick()
 
 void sdlAudioCallback(void *userdata, Uint8 * stream, int len)
 {
-	if (audioPlayer)
-	{
-		audioPlayer->getPCMBuffer([&stream, &len](const FAudioPCMBuffer *buffer) {
-			if (buffer)
-			{
-				const float* data = buffer->immutableFloatChannelData()[0];
-				memcpy(stream, data, len);
-			}
-			else
-			{
-				SDL_memset(stream, 0, len);
-			}
-		});
-	}
-	else
+	if (audioPlayer == nullptr)
 	{
 		SDL_memset(stream, 0, len);
+		return;
 	}
+
+	audioPlayer->getPCMBuffer([&stream, &len](const FAudioPCMBuffer *buffer) {
+		if (buffer == nullptr)
+		{
+			SDL_memset(stream, 0, len);
+			return;
+		}
+		memcpy(stream, buffer->immutableFloatChannelData()[0], len);
+	});
 }
 
-void initSDLAudio()
+void initSDLAudio(const int samples)
 {
 	if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0)
 	{
@@ -177,7 +175,7 @@ void initSDLAudio()
 	audioSpec.format = AUDIO_F32LSB;
 	audioSpec.channels = 2;
 	audioSpec.silence = 0;
-	audioSpec.samples = 1024;
+	audioSpec.samples = samples;
 	audioSpec.callback = sdlAudioCallback;
 
 	SDL_AudioSpec actualAudioSpec;
@@ -198,6 +196,7 @@ struct Vertex
 
 int main(int argc, char *argv[])
 {
+	const int audioSamples = 1024;
 	spdlog::set_level(spdlog::level::trace);
 	assert(argc > 1);
 	const std::string projectFilePath = argv[1];
@@ -209,7 +208,7 @@ int main(int argc, char *argv[])
 	imagePlayer = new FImagePlayer();
 	imagePlayer->pipeline = imageCompositionPipeline;
 	imagePlayer->replace(videoProject->getVideoDescription());
-	audioPlayer = new FAudioPlayer();
+	audioPlayer = new FAudioPlayer(audioSamples);
 	audioPlayer->replace(videoProject->getVideoDescription());
 
 	glInit();
@@ -241,7 +240,7 @@ int main(int argc, char *argv[])
 	vertexBuffer.push_back(bottomLeft);
 	vertexBuffer.push_back(bottomRight);
 
-	std::vector<unsigned int> indexBufferData = { 0, 1, 2, 1, 2, 3 };
+	std::vector<unsigned int> indexBufferData = { 0, 1, 2, 2, 1, 3 };
 
 	FGLVertexObject* glVO = new FGLVertexObject(vertexBuffer.data(), sizeof(Vertex) * vertexBuffer.size(), indexBufferData.data(), indexBufferData.size(), []()
 	{
@@ -285,12 +284,12 @@ int main(int argc, char *argv[])
 	glVO->Bind();
 	imageShader->Bind();
 
-	initSDLAudio();
+	initSDLAudio(audioSamples);
 
 	while (!glfwWindowShouldClose(Window))
 	{
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		currentTime = imagePlayer->getCurrentTime().seconds();
 
