@@ -27,59 +27,54 @@ extern "C"
 #include "SDL.h"
 }
 
-#include "Core/FVideoEditor.h"
-#include "spdlog/spdlog.h"
-#include "GLKit/GLKit.h"
-
+#include <VideoEditor/VideoEditor.hpp>
+#include <Foundation/Foundation.hpp>
+#include <KSImage/KSImage.hpp>
+#include <spdlog/spdlog.h>
 #include "imgui.h"
+#include "backends/imgui_impl_dx11.h"
+#include "backends/imgui_impl_win32.h"
+#include "Platform/WindowsPlatform.hpp"
 
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
-
-
-GLFWwindow* Window = nullptr;
-FVideoProject* videoProject = nullptr;
-FImagePlayer* imagePlayer = nullptr;
-FImageCompositionPipeline* imageCompositionPipeline = nullptr;
+ks::FVideoProject* videoProject = nullptr;
+ks::FImagePlayer* imagePlayer = nullptr;
+ks::FImageCompositionPipeline* imageCompositionPipeline = nullptr;
 float currentTime = 0;
 bool isPause = false;
-FAudioPlayer* audioPlayer = nullptr;
+ks::FAudioPlayer* audioPlayer = nullptr;
+static std::unique_ptr<WindowsPlatform> windowsPlatformPtr;
+unsigned int currentWindowWidth = 1280;
+unsigned int currentWindowHeight = 720;
 
-void glInit()
+std::unique_ptr<ks::IRenderEngine> defaultRenderEngine = std::unique_ptr<ks::IRenderEngine>();
+std::unique_ptr<ks::IRenderEngine> filterRenderEngine = std::unique_ptr<ks::IRenderEngine>();
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+void ImGuiInit()
 {
-	const bool initRet = glfwInit();
-	assert(initRet);
-	glfwWindowHint(GLFW_SAMPLES, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-	Window = glfwCreateWindow(1280, 720, "Video Editor", NULL, NULL);
-	assert(Window);
-
-	glfwSwapInterval(1);
-
-	glfwMakeContextCurrent(Window);
-	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-	glEnable(GL_MULTISAMPLE);
-}
-
-void imguiInit()
-{
-	const std::string Version = "#version 330";
+	windowsPlatformPtr->WndProcCallback = [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bool& intercept)
+	{
+		intercept = ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
+		return true;
+	};
+	windowsPlatformPtr->sizeChange = [](unsigned int width, unsigned int height)
+	{
+		currentWindowWidth = width;
+		currentWindowHeight = height;
+	};
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::StyleColorsDark();
-	ImGui_ImplGlfw_InitForOpenGL(Window, true);
-	const bool initRet = ImGui_ImplOpenGL3_Init(Version.c_str());
-	assert(initRet);
+	ImGui_ImplWin32_Init(windowsPlatformPtr->getHwnd());
+	ImGui_ImplDX11_Init(windowsPlatformPtr->getDevice(), windowsPlatformPtr->getDeviceContext());
 }
 
-void imguiDestroy()
+void ImGuiDestroy()
 {
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplDX11_Shutdown();
+	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 }
 
@@ -93,9 +88,9 @@ void imguiDrawUI()
 
 	assert(imagePlayer != nullptr);
 
-	if (ImGui::SliderFloat("current time", &currentTime, 0.0, 100.0))
+	if (ImGui::SliderFloat("Current time", &currentTime, 0.0, 100.0))
 	{
-		const FMediaTime seekTime = FMediaTime(currentTime, 600);
+		const ks::MediaTime seekTime = ks::MediaTime(currentTime, 600);
 
 		imagePlayer->seek(seekTime);
 		if (audioPlayer)
@@ -104,7 +99,7 @@ void imguiDrawUI()
 		}
 	}
 
-	if (ImGui::Button("play"))
+	if (ImGui::Button("Play"))
 	{
 		isPause = false;
 		imagePlayer->play();
@@ -114,7 +109,7 @@ void imguiDrawUI()
 		}
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("pause"))
+	if (ImGui::Button("Pause"))
 	{
 		isPause = true;
 		imagePlayer->pause();
@@ -126,11 +121,11 @@ void imguiDrawUI()
 
 	if (isPause)
 	{
-		ImGui::Text("pause");
+		ImGui::Text("Pause");
 	}
 	else
 	{
-		ImGui::Text("playing");
+		ImGui::Text("Playing");
 	}
 
 	ImGui::End();
@@ -138,12 +133,13 @@ void imguiDrawUI()
 
 void imaguiTick()
 {
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 	imguiDrawUI();
 	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	windowsPlatformPtr->setRenderTarget();
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
 void sdlAudioCallback(void *userdata, Uint8 * stream, int len)
@@ -154,7 +150,7 @@ void sdlAudioCallback(void *userdata, Uint8 * stream, int len)
 		return;
 	}
 
-	audioPlayer->getPCMBuffer([&stream, &len](const FAudioPCMBuffer *buffer) {
+	audioPlayer->getPCMBuffer([&stream, &len](const ks::AudioPCMBuffer *buffer) {
 		if (buffer == nullptr)
 		{
 			SDL_memset(stream, 0, len);
@@ -188,126 +184,124 @@ void initSDLAudio(const int samples)
 	SDL_PauseAudio(0);
 }
 
-struct Vertex
+void drawResult(const ks::PixelBuffer* pixelBuffer)
 {
-	glm::vec2 iPosition;
-	glm::vec2 iTexCoords;
-};
+	windowsPlatformPtr->setRenderTarget();
 
-int main(int argc, char *argv[])
-{
-	const int audioSamples = 1024;
-	spdlog::set_level(spdlog::level::trace);
-	assert(argc > 1);
-	const std::string projectFilePath = argv[1];
+	static const std::string vert = ks::File::read(ks::Application::getResourcePath("Shader/vert.hlsl"), nullptr);
+	static const std::string frag = ks::File::read(ks::Application::getResourcePath("Shader/frag.hlsl"), nullptr);
 
-	imageCompositionPipeline = new FImageCompositionPipeline();
-	videoProject = new FVideoProject(projectFilePath);
-	assert(videoProject->getVideoDescription()->renderContext.audioRenderContext.audioFormat.isNonInterleaved() == false);
-	bool ret = videoProject->prepare();
-	imagePlayer = new FImagePlayer();
-	imagePlayer->pipeline = imageCompositionPipeline;
-	imagePlayer->replace(videoProject->getVideoDescription());
-	audioPlayer = new FAudioPlayer(audioSamples);
-	audioPlayer->replace(videoProject->getVideoDescription());
+	ks::IRenderEngine& engine = *defaultRenderEngine.get();
 
-	glInit();
-	imguiInit();
-
-
-	std::vector<Vertex> vertexBuffer;
-
-	Vertex topLeft;
-	Vertex topRight;
-	Vertex bottomLeft;
-	Vertex bottomRight;
-
-	topLeft.iPosition = glm::vec2(-1.0, 1.0);
-	topLeft.iTexCoords = glm::vec2(0, 0);
-
-	topRight.iPosition = glm::vec2(1.0, 1.0);
-	topRight.iTexCoords = glm::vec2(1, 0);
-
-	bottomLeft.iPosition = glm::vec2(-1.0, -1.0);
-	bottomLeft.iTexCoords = glm::vec2(0, 1);
-
-	bottomRight.iPosition = glm::vec2(1.0, -1.0);
-	bottomRight.iTexCoords = glm::vec2(1, 1);
-
-
-	vertexBuffer.push_back(topLeft);
-	vertexBuffer.push_back(topRight);
-	vertexBuffer.push_back(bottomLeft);
-	vertexBuffer.push_back(bottomRight);
+	struct Vertex
+	{
+		glm::vec2 aPosition;
+		glm::vec2 texCoord;
+	};
 
 	std::vector<unsigned int> indexBufferData = { 0, 1, 2, 2, 1, 3 };
 
-	FGLVertexObject* glVO = new FGLVertexObject(vertexBuffer.data(), sizeof(Vertex) * vertexBuffer.size(), indexBufferData.data(), indexBufferData.size(), []()
+	std::vector<Vertex> vertexBuffer;
 	{
-		FGLVertexBufferLayout layout;
-		layout.Float(2).Float(2);
-		return  layout;
-	});
+		Vertex topLeft;
+		Vertex topRight;
+		Vertex bottomLeft;
+		Vertex bottomRight;
 
-	const std::string vert =
-		R"(
-			#version 330 core
+		topLeft.aPosition = glm::vec2(-1.0, 1.0);
+		topLeft.texCoord = glm::vec2(0.0, 0.0);
+		topRight.aPosition = glm::vec2(1.0, 1.0);
+		topRight.texCoord = glm::vec2(1.0, 0.0);
+		bottomLeft.aPosition = glm::vec2(-1.0, -1.0);
+		bottomLeft.texCoord = glm::vec2(0.0, 1.0);
+		bottomRight.aPosition = glm::vec2(1.0, -1.0);
+		bottomRight.texCoord = glm::vec2(1.0, 1.0);
 
-			layout (location = 0) in vec2 iPosition;
-			layout (location = 1) in vec2 iTexCoords;
+		vertexBuffer.push_back(topLeft);
+		vertexBuffer.push_back(topRight);
+		vertexBuffer.push_back(bottomLeft);
+		vertexBuffer.push_back(bottomRight);
+	}
 
-			out vec2 oTexCoords;
+	ks::ITexture2D* colorMap = engine.createTexture2D(pixelBuffer->getWidth(),
+		pixelBuffer->getHeight(),
+		ks::TextureFormat::R8G8B8A8_UNORM,
+		pixelBuffer->getImmutableData()[0]);
+	static ks::IShader* shader = engine.createShader(vert, frag);
+	shader->setTexture2D("colorMap", *colorMap);
+	ks::IRenderBuffer * renderBuffer = engine.createRenderBuffer(vertexBuffer.data(), vertexBuffer.size(), sizeof(Vertex),
+		*shader,
+		indexBufferData.data(), indexBufferData.size(), ks::IIndexBuffer::IndexDataType::uint32);
+	ks::IBlendState* blendState = engine.createBlendState(ks::BlendStateDescription::Addition::getDefault(), ks::BlendStateDescription::getDefault());
+	ks::IDepthStencilState* depthStencilState = engine.createDepthStencilState(ks::DepthStencilStateDescription::getDefault());
+	ks::IRasterizerState* rasterizerState = engine.createRasterizerState(ks::RasterizerStateDescription::getDefault());
+	renderBuffer->setViewport(0, 0, currentWindowWidth, currentWindowHeight);
+	renderBuffer->setBlendState(*blendState);
+	renderBuffer->setDepthStencilState(*depthStencilState);
+	renderBuffer->setRasterizerState(*rasterizerState);
+	renderBuffer->setPrimitiveTopologyType(ks::PrimitiveTopologyType::trianglelist);
+	renderBuffer->commit(nullptr);
 
-			void main()
-			{
-				oTexCoords = iTexCoords;
-				gl_Position = vec4(iPosition.x, iPosition.y, 0.0, 1.0);
-			}
-		)";
+	engine.erase(renderBuffer);
+	engine.erase(blendState);
+	engine.erase(depthStencilState);
+	engine.erase(rasterizerState);
+	engine.erase(colorMap);
+}
 
-	const std::string frag =
-		R"(
-			#version 330 core
+int main(int argc, char *argv[])
+{
+	assert(argc > 1);
 
-			uniform sampler2D imageTexture;
-			in vec2 oTexCoords;
-			out vec4 oFragColor;
+	spdlog::set_level(spdlog::level::trace);
+	ks::Application::Init(argc, argv);
+	const int audioSamples = 1024;
+	const std::string projectFilePath = argv[1];
 
-			void main()
-			{
-				oFragColor = texture(imageTexture, oTexCoords);
-			}
-		)";
+	WindowsPlatform::Configuration cfg;
+	cfg.windowHeight = currentWindowHeight;
+	cfg.windowWidth = currentWindowWidth;
+	cfg.windowName = "VideoEditor";
+	windowsPlatformPtr = std::make_unique<WindowsPlatform>(cfg);
 
-	FGLShader* imageShader = FGLShader::NewWithSource(vert, frag);
-
-	glVO->Bind();
-	imageShader->Bind();
+	ks::D3D11RenderEngineCreateInfo createInfo;
+	ks::D3D11RenderEngineCreateInfo::NativeData nativeData;
+	nativeData.device = windowsPlatformPtr->getDevice();
+	nativeData.context = windowsPlatformPtr->getDeviceContext();
+	createInfo.data = &nativeData;
+	defaultRenderEngine = std::unique_ptr<ks::IRenderEngine>(ks::RenderEngine::create(createInfo));
+	filterRenderEngine = std::unique_ptr<ks::IRenderEngine>(ks::RenderEngine::create(createInfo));
+	ks::InitVideoEditor(filterRenderEngine.get());
 
 	initSDLAudio(audioSamples);
-
-	while (!glfwWindowShouldClose(Window))
+	ImGuiInit();
+	defer
 	{
-		//glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		ImGuiDestroy();
+	};
 
+	imageCompositionPipeline = new ks::FImageCompositionPipeline();
+	videoProject = new ks::FVideoProject(projectFilePath);
+	assert(videoProject->getVideoDescription()->renderContext.audioRenderContext.audioFormat.isNonInterleaved() == false);
+	bool ret = videoProject->prepare();
+	imagePlayer = new ks::FImagePlayer();
+	imagePlayer->pipeline = imageCompositionPipeline;
+	imagePlayer->replace(videoProject->getVideoDescription());
+	audioPlayer = new ks::FAudioPlayer(audioSamples);
+	audioPlayer->replace(videoProject->getVideoDescription());
+
+	while (windowsPlatformPtr->shouldClose() == false)
+	{
+		windowsPlatformPtr->clearColor();
 		currentTime = imagePlayer->getCurrentTime().seconds();
 
-		const FPixelBuffer *const pixelBuffer = imagePlayer->getPixelBuffer();
-		if (pixelBuffer)
+		if (const ks::PixelBuffer * pixelBuffer = imagePlayer->getPixelBuffer())
 		{
-			FGLTexture* texture = FGLTexture::NewTexture2D(pixelBuffer->width(), pixelBuffer->height(), GLPixelFormatType::RGBA, pixelBuffer->immutableData()[0]);
-			imageShader->SetTexture("imageTexture", *texture);
-			glDrawElements(GL_TRIANGLES, indexBufferData.size(), GL_UNSIGNED_INT, 0);
-			delete texture;
+			drawResult(pixelBuffer);
 		}
-
 		imaguiTick();
-		glfwSwapBuffers(Window);
-		glfwPollEvents();
-	}
-	imguiDestroy();
-	glfwTerminate();
+		windowsPlatformPtr->present();
+	};
 
 	return 0;
 }

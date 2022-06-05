@@ -15,7 +15,7 @@
             "sample_rate": 44100.0,
             "sample_type": "float32",
             "channel": 2,
-            "is_noninterleaved": false
+            "is_noninterleaved": true
         },
         "time_scale": 44100,
         "composition_time_range": {
@@ -28,22 +28,34 @@
             "path": "BigBuckBunny.mp4",
             "source_time_range": {
                 "start": 0.0,
-                "end": 50.0
+                "end": 100.0
             },
             "target_time_range": {
                 "start": 0.0,
-                "end": 50.0
+                "end": 100.0
+            },
+            "rect":{
+                "x":0.0,
+                "y":0.0,
+                "width":640.0,
+                "height":360.0
             }
         },
         {
             "path": "ElephantsDream.mp4",
             "source_time_range": {
                 "start": 0.0,
-                "end": 50.0
+                "end": 100.0
             },
             "target_time_range": {
-                "start": 50.0,
+                "start": 0.0,
                 "end": 100.0
+            },
+            "rect":{
+                "x":640.0,
+                "y":360.0,
+                "width":640.0,
+                "height":360.0
             }
         }
     ],
