@@ -19,13 +19,13 @@
 
 namespace ks
 {
-	FAudioPlayer::FAudioPlayer(const int samples)
+	AudioPlayer::AudioPlayer(const int samples)
 		:samples(samples)
 	{
 		semaphore = new Semaphore(0);
 	}
 
-	FAudioPlayer::~FAudioPlayer()
+	AudioPlayer::~AudioPlayer()
 	{
 		if (timer)
 		{
@@ -34,19 +34,19 @@ namespace ks
 		}
 	}
 
-	void FAudioPlayer::play()
+	void AudioPlayer::play()
 	{
 		std::lock_guard<std::mutex> lockg(isPauseMutex);
 		isPause = false;
 	}
 
-	void FAudioPlayer::pause()
+	void AudioPlayer::pause()
 	{
 		std::lock_guard<std::mutex> lockg(isPauseMutex);
 		isPause = true;
 	}
 
-	void FAudioPlayer::seek(const MediaTime & time)
+	void AudioPlayer::seek(const MediaTime & time)
 	{
 		const MediaTime seekTime = time;
 		if (seekTime == getCurrentTime())
@@ -56,7 +56,7 @@ namespace ks
 		setCurrentTime(seekTime);
 
 		std::lock_guard<std::mutex> lock(buffersMutex);
-		buffers.erase(std::remove_if(buffers.begin(), buffers.end(), [&](FAudioCompositionRequest request) {
+		buffers.erase(std::remove_if(buffers.begin(), buffers.end(), [&](AudioCompositionRequest request) {
 			if (request.compositionTimeRange.start < time)
 			{
 				delete request.buffer;
@@ -77,7 +77,7 @@ namespace ks
 		}
 	}
 
-	void FAudioPlayer::replace(const FVideoDescription * videoDescription)
+	void AudioPlayer::replace(const VideoDescription * videoDescription)
 	{
 		pause();
 		if (timer)
@@ -119,13 +119,13 @@ namespace ks
 		}
 	}
 
-	MediaTime FAudioPlayer::getCurrentTime() const
+	MediaTime AudioPlayer::getCurrentTime() const
 	{
 		std::lock_guard<std::mutex> lockg(mutex);
 		return currentTime.convertScale(audioRenderContext.audioFormat.sampleRate);
 	}
 
-	void FAudioPlayer::getPCMBuffer(std::function<void(const AudioPCMBuffer*)> retrieval)
+	void AudioPlayer::getPCMBuffer(std::function<void(const AudioPCMBuffer*)> retrieval)
 	{
 		std::lock_guard<std::mutex> isPauseMutexLock(isPauseMutex);
 
@@ -163,25 +163,25 @@ namespace ks
 		}
 	}
 
-	void FAudioPlayer::setCurrentTime(const MediaTime & time)
+	void AudioPlayer::setCurrentTime(const MediaTime & time)
 	{
 		std::lock_guard<std::mutex> lockg(mutex);
 		currentTime = time.convertScale(audioRenderContext.audioFormat.sampleRate);
 	}
 
-	void FAudioPlayer::setAudioDuration(const MediaTime & time)
+	void AudioPlayer::setAudioDuration(const MediaTime & time)
 	{
 		std::lock_guard<std::mutex> lockg(mutex);
 		audioDuration = time.convertScale(audioRenderContext.audioFormat.sampleRate);
 	}
 
-	MediaTime FAudioPlayer::getAudioDuration() const
+	MediaTime AudioPlayer::getAudioDuration() const
 	{
 		std::lock_guard<std::mutex> lockg(mutex);
 		return audioDuration.convertScale(audioRenderContext.audioFormat.sampleRate);
 	}
 
-	void FAudioPlayer::mix(AudioPCMBuffer & outBuffer, std::vector<AudioPCMBuffer*> buffers)
+	void AudioPlayer::mix(AudioPCMBuffer & outBuffer, std::vector<AudioPCMBuffer*> buffers)
 	{
 		bool isNonInterleaved = outBuffer.audioFormat().formatFlags.isContains(AudioFormatFlag::isNonInterleaved);
 		bool isFloat = outBuffer.audioFormat().formatFlags.isContains(AudioFormatFlag::isFloat);
@@ -221,7 +221,7 @@ namespace ks
 	}
 
 
-	MediaTime FAudioPlayer::round(const MediaTime & time, const MediaTime & duration) const
+	MediaTime AudioPlayer::round(const MediaTime & time, const MediaTime & duration) const
 	{
 		assert(duration.seconds() > 0.0);
 		assert(time.timeScale() == duration.timeScale());
@@ -230,7 +230,7 @@ namespace ks
 		return MediaTime(timeValue, audioRenderContext.audioFormat.sampleRate);
 	}
 
-	void FAudioPlayer::openDecodeAudioThreadIfNeed()
+	void AudioPlayer::openDecodeAudioThreadIfNeed()
 	{
 		if (isDecodeAudioThreadOpen)
 		{
@@ -239,7 +239,7 @@ namespace ks
 		openDecodeAudioThread();
 	}
 
-	void FAudioPlayer::openDecodeAudioThread()
+	void AudioPlayer::openDecodeAudioThread()
 	{
 		assert(videoDescription);
 
@@ -258,7 +258,7 @@ namespace ks
 				buffersMutex.lock();
 				if (buffers.empty() == false)
 				{
-					FAudioCompositionRequest frontRequest = buffers.front();
+					AudioCompositionRequest frontRequest = buffers.front();
 					const AudioPCMBuffer* buffer = frontRequest.buffer;
 					condition0 = currentTime < frontRequest.compositionTimeRange.start;
 					condition1 = frontRequest.compositionTimeRange.start + MediaTime(duration.seconds() * (double)cacheSize, duration.timeScale()) < currentTime;
@@ -278,7 +278,7 @@ namespace ks
 				{
 					compositionTime = currentTime;
 					buffersMutex.lock();
-					for (FAudioCompositionRequest request : buffers)
+					for (AudioCompositionRequest request : buffers)
 					{
 						delete request.buffer;
 					}
@@ -286,7 +286,7 @@ namespace ks
 
 					buffersMutex.unlock();
 
-					FVideoInstruction videoInstuction;
+					VideoInstruction videoInstuction;
 					if (videoDescription->videoInstuction(compositionTime, videoInstuction))
 					{
 						for (FAudioTrack* audioTrack : videoInstuction.audioTracks)
@@ -308,7 +308,7 @@ namespace ks
 					}
 				}
 
-				FVideoInstruction videoInstuction;
+				VideoInstruction videoInstuction;
 				if (videoDescription->videoInstuction(compositionTime, videoInstuction) && compositionTime < getAudioDuration())
 				{
 					std::vector<AudioPCMBuffer*> tmpBuffers;
@@ -334,7 +334,7 @@ namespace ks
 						videoInstuction.audioTracks[i]->samples(timeRange, tmpBuffers[i]);
 						videoInstuction.audioTracks[i]->flush(compositionTime);
 					}
-					FAudioCompositionRequest request;
+					AudioCompositionRequest request;
 					request.compositionTimeRange = timeRange;
 					request.buffer = new AudioPCMBuffer(audioRenderContext.audioFormat, samples);
 					AudioPCMBuffer* outputBuffer = request.buffer;
@@ -355,13 +355,13 @@ namespace ks
 		}).detach();
 	}
 
-	void FAudioPlayer::setIsDecodeAudioThreadWaiting(const bool flag)
+	void AudioPlayer::setIsDecodeAudioThreadWaiting(const bool flag)
 	{
 		std::lock_guard<std::mutex> lock(isDecodeAudioThreadWaitingMutex);
 		isDecodeAudioThreadWaiting = flag;
 	}
 
-	bool FAudioPlayer::getIsDecodeAudioThreadWaiting() const
+	bool AudioPlayer::getIsDecodeAudioThreadWaiting() const
 	{
 		std::lock_guard<std::mutex> lock(isDecodeAudioThreadWaitingMutex);
 		return isDecodeAudioThreadWaiting;

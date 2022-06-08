@@ -25,23 +25,23 @@
 
 namespace ks
 {
-	struct FAsyncImageCompositionRequest
+	struct AsyncImageCompositionRequest 
 	{
 		MediaTime compositionTime = MediaTime::zero;
 		std::unordered_map<unsigned int, const PixelBuffer*> sourceFrames;
 		//PixelBuffer* pixelBuffer = nullptr;
 		std::function<PixelBuffer*()> getPixelBuffer;
-		FVideoInstruction instruction;
-		const FVideoRenderContext* videoRenderContext = nullptr;
+		VideoInstruction instruction;
+		const VideoRenderContext* videoRenderContext = nullptr;
 	};
 
-	class FImageCompositionPipeline
+	class ImageCompositionPipeline
 	{
 	public:
-		FImageCompositionPipeline();
-		~FImageCompositionPipeline();
+		ImageCompositionPipeline();
+		~ImageCompositionPipeline();
 
-		virtual void composition(FAsyncImageCompositionRequest& request, std::function<PixelBuffer*()> getPixelBuffer);
+		virtual void composition(AsyncImageCompositionRequest& request, std::function<PixelBuffer*()> getPixelBuffer);
 	};
 }
 

@@ -24,7 +24,7 @@
 
 namespace ks
 {
-	struct FVideoInstruction
+	struct VideoInstruction
 	{
 		MediaTimeRange timeRange;
 		std::vector<IImageTrack *> imageTracks;

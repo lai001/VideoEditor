@@ -29,25 +29,25 @@
 
 namespace ks
 {
-	FExportSession::FExportSession(const FVideoDescription& videoDescription, FImageCompositionPipeline& imageCompositionPipeline)
+	ExportSession::ExportSession(const VideoDescription& videoDescription, ImageCompositionPipeline& imageCompositionPipeline)
 		: videoDescription(&videoDescription), imageCompositionPipeline(&imageCompositionPipeline)
 	{
 
 	}
 
-	FExportSession::~FExportSession()
+	ExportSession::~ExportSession()
 	{
 
 	}
 
-	void FExportSession::start(const std::string& filename,
-		std::function<void(const FExportSession::EncodeType& type, const MediaTime& time)> progressCallback)
+	void ExportSession::start(const std::string& filename,
+		std::function<void(const ExportSession::EncodeType& type, const MediaTime& time)> progressCallback)
 	{
 		assert(videoDescription);
 		assert(imageCompositionPipeline);
 
-		const FVideoRenderContext videoRenderContext = videoDescription->renderContext.videoRenderContext;
-		const FAudioRenderContext audioRenderContext = videoDescription->renderContext.audioRenderContext;
+		const VideoRenderContext videoRenderContext = videoDescription->renderContext.videoRenderContext;
+		const AudioRenderContext audioRenderContext = videoDescription->renderContext.audioRenderContext;
 		assert(audioRenderContext.audioFormat.isNonInterleaved());
 		assert(audioRenderContext.audioFormat.isFloat());
 
@@ -79,8 +79,8 @@ namespace ks
 			{
 				break;
 			}
-			progressCallback(FExportSession::EncodeType::video, encodeImageTime);
-			FVideoInstruction videoInstuction;
+			progressCallback(ExportSession::EncodeType::video, encodeImageTime);
+			VideoInstruction videoInstuction;
 			if (videoDescription->videoInstuction(encodeImageTime, videoInstuction) == false)
 			{
 				break;
@@ -91,7 +91,7 @@ namespace ks
 				encodeImageTime = encodeImageTime.convertScale(videoEncodeAttribute.timeBase.timeScale());
 			};
 
-			FAsyncImageCompositionRequest request;
+			AsyncImageCompositionRequest request;
 			request.instruction = videoInstuction;
 			request.videoRenderContext = &videoRenderContext;
 
@@ -120,10 +120,10 @@ namespace ks
 			{
 				break;
 			}
-			progressCallback(FExportSession::EncodeType::audio, encodeAudioTime);
+			progressCallback(ExportSession::EncodeType::audio, encodeAudioTime);
 
 			const MediaTime duration = MediaTime(static_cast<int>(videoFileEncoder->getAudioSamples()), audioFormat.sampleRate);
-			FVideoInstruction videoInstuction;
+			VideoInstruction videoInstuction;
 			if (videoDescription->videoInstuction(encodeAudioTime, videoInstuction) == false)
 			{
 				break;

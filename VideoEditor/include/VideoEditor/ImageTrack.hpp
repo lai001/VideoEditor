@@ -34,9 +34,9 @@ namespace ks
 
 	public:
 		virtual ~IImageTrack() = 0 {};
-		virtual const PixelBuffer *sourceFrame(const MediaTime& compositionTime, const FVideoRenderContext& renderContext) = 0;
-		virtual const PixelBuffer *compositionImage(const PixelBuffer& sourceFrame, const MediaTime& compositionTime, const FVideoRenderContext& renderContext) = 0;
-		virtual void prepare(const FVideoRenderContext& renderContext) = 0;
+		virtual const PixelBuffer *sourceFrame(const MediaTime& compositionTime, const VideoRenderContext& renderContext) = 0;
+		virtual const PixelBuffer *compositionImage(const PixelBuffer& sourceFrame, const MediaTime& compositionTime, const VideoRenderContext& renderContext) = 0;
+		virtual void prepare(const VideoRenderContext& renderContext) = 0;
 		virtual void onSeeking(const MediaTime& compositionTime) = 0;
 		virtual void flush(const MediaTime& compositionTime) = 0;
 		virtual void flush() = 0;

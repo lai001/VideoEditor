@@ -30,7 +30,7 @@
 
 namespace ks
 {
-	class FVideoProject : public boost::noncopyable
+	class VideoProject : public noncopyable
 	{
 		typedef nlohmann::json Json;
 
@@ -38,25 +38,25 @@ namespace ks
 		std::string projectDir;
 		std::string projectFilePath;
 
-		FVideoDescription *videoDescription = nullptr;
+		VideoDescription *videoDescription = nullptr;
 		//std::vector<IImageTrack *> imageTracks;
 		//std::vector<FAudioTrack *> audioTracks;
 
 		void clean();
 		MediaTimeRange converTimeRange(const Json & json, int timeScale);
 		Rect converRect(const Json & json);
-		bool loadVideoRenderContext(const Json & json, FVideoRenderContext& context);
-		bool loadAudioRenderContext(const Json & json, FAudioRenderContext& context);
+		bool loadVideoRenderContext(const Json & json, VideoRenderContext& context);
+		bool loadAudioRenderContext(const Json & json, AudioRenderContext& context);
 		bool loadVideoTracks(const Json & json);
 		bool loadAudioTracks(const Json & json);
 
 	public:
-		FVideoProject(const std::string& projectFilePath);
-		~FVideoProject();
+		VideoProject(const std::string& projectFilePath);
+		~VideoProject();
 
 		bool prepare();
 
-		const FVideoDescription *getVideoDescription() const;
+		const VideoDescription *getVideoDescription() const;
 		const std::vector<IImageTrack *> getImageTracks() const;
 		const std::vector<FAudioTrack *> getAudioTracks() const;
 

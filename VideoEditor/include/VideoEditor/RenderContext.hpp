@@ -24,7 +24,7 @@
 
 namespace ks
 {
-	class FVideoRenderContext
+	class VideoRenderContext
 	{
 	public:
 		FSize renderSize;
@@ -32,27 +32,26 @@ namespace ks
 		float fps;
 		PixelBuffer::FormatType format;
 
-		FVideoRenderContext() = default;
-		~FVideoRenderContext() = default;
+		VideoRenderContext() = default;
+		~VideoRenderContext() = default;
 	};
 
-	class FAudioRenderContext
+	class AudioRenderContext
 	{
 	public:
 		AudioFormat audioFormat;
 
-		FAudioRenderContext() = default;
-		~FAudioRenderContext() = default;
+		AudioRenderContext() = default;
+		~AudioRenderContext() = default;
 	};
 
-	class FRenderContext
+	class RenderContext
 	{
 	public:
-		FVideoRenderContext videoRenderContext;
-		FAudioRenderContext audioRenderContext;
-		FRenderContext() = default;
-		~FRenderContext() = default;
-
+		VideoRenderContext videoRenderContext;
+		AudioRenderContext audioRenderContext;
+		RenderContext() = default;
+		~RenderContext() = default;
 	};
 }
 

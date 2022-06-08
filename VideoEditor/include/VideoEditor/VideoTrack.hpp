@@ -27,22 +27,22 @@
 
 namespace ks
 {
-	struct FSourceFrame
+	struct SourceFrame
 	{
 		PixelBuffer * sourceFrame = nullptr;
 		MediaTime displayTime;
 	};
 
-	class FVideoTrack : public IImageTrack
+	class VideoTrack : public IImageTrack
 	{
 	public:
-		FVideoTrack();
-		~FVideoTrack();
+		VideoTrack();
+		~VideoTrack();
 
 	private:
 		VideoDecoder *decoder = nullptr;
 
-		std::vector<FSourceFrame> videoFrameQueue;
+		std::vector<SourceFrame> videoFrameQueue;
 
 		std::mutex decoderMutex;
 
@@ -50,9 +50,9 @@ namespace ks
 		std::string filePath;
 
 	public:
-		virtual const PixelBuffer * sourceFrame(const MediaTime & compositionTime, const FVideoRenderContext & renderContext) override;
-		virtual const PixelBuffer * compositionImage(const PixelBuffer & sourceFrame, const MediaTime & compositionTime, const FVideoRenderContext & renderContext) override;
-		virtual void prepare(const FVideoRenderContext & renderContext) override;
+		virtual const PixelBuffer * sourceFrame(const MediaTime & compositionTime, const VideoRenderContext & renderContext) override;
+		virtual const PixelBuffer * compositionImage(const PixelBuffer & sourceFrame, const MediaTime & compositionTime, const VideoRenderContext & renderContext) override;
+		virtual void prepare(const VideoRenderContext & renderContext) override;
 		virtual void onSeeking(const MediaTime & compositionTime) override;
 		virtual void flush(const MediaTime & compositionTime) override;
 		virtual void flush() override;

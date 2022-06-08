@@ -17,7 +17,6 @@
 
 #include "ImagePlayer.hpp"
 #include <KSImage/KSImage.hpp>
-#include <spdlog/spdlog.h>
 #include "Util.hpp"
 
 namespace ks
@@ -27,6 +26,7 @@ namespace ks
 	{
 		assert(renderEngine);
 		semaphore = new Semaphore(0);
+		waitingRenderFinishSemaphore = new Semaphore(0);
 	}
 
 	FImagePlayer::~FImagePlayer()
@@ -40,28 +40,29 @@ namespace ks
 
 	void FImagePlayer::play()
 	{
-		std::lock_guard<std::mutex> isPauseMutexLock(isPauseMutex);
+		std::lock_guard<std::mutex> lock(isPauseMutex);
 		isPause = false;
 	}
 
 	void FImagePlayer::pause()
 	{
-		std::lock_guard<std::mutex> isPauseMutexLock(isPauseMutex);
+		std::lock_guard<std::mutex> lock(isPauseMutex);
 		isPause = true;
 	}
 
 	void FImagePlayer::seek(const MediaTime & time)
 	{
-		const MediaTime fps = MediaTime(1.0 / videoDescription->renderContext.videoRenderContext.fps, timeScale);
+		//const MediaTime fps = MediaTime(1.0 / videoDescription->renderContext.videoRenderContext.fps, timeScale);
 		const MediaTime seekTime = time;
-		if (seekTime == getCurrentTime())
-		{
-			return;
-		}
-		setCurrentTime(seekTime);
+		std::lock_guard<std::mutex> lock(currentTimeMutex);
+		//if (seekTime == currentTime)
+		//{
+		//	return;
+		//}
+		currentTime = seekTime;
 	}
 
-	void FImagePlayer::replace(const FVideoDescription* videoDescription)
+	void FImagePlayer::replace(const VideoDescription* videoDescription)
 	{
 		pause();
 		if (timer)
@@ -72,7 +73,7 @@ namespace ks
 
 		if (videoDescription)
 		{
-			setVideoDuration(videoDescription->duration());
+			this->videoDuration = videoDescription->duration();
 			this->videoDescription = videoDescription;
 			videoRenderContext = videoDescription->renderContext.videoRenderContext;
 			resetPixelBufferPool(videoRenderContext);
@@ -80,24 +81,11 @@ namespace ks
 
 			const MediaTime fps = MediaTime(1.0 / videoDescription->renderContext.videoRenderContext.fps, timeScale);
 
-			timer = new SimpleTimer(10, [this, fps](SimpleTimer& timer)
+			timer = new SimpleTimer(25, [this, fps](SimpleTimer& timer)
 			{
-				const MediaTime currentTime = getCurrentTime();
-				//spdlog::debug("video play time: {:.3f}", currentTime.seconds());
-
-				timerTick(currentTime, fps);
-
-				std::lock_guard<std::mutex> isPauseMutexLock(isPauseMutex);
-				if (isPause == false)
-				{
-					const double seconds = (double)timer.getDuration() / 1000.0;
-					MediaTime newTime = currentTime + MediaTime(seconds, 1000000);
-					newTime = MediaTimeRange(MediaTime::zero, getVideoDuration()).clamp(newTime);
-					setCurrentTime(newTime);
-				}
+				timerTick(timer, fps);
 			});
 
-			std::lock_guard<std::mutex> isPauseMutexLock(isPauseMutex);
 			isPause = false;
 			timer->fire();
 		}
@@ -110,25 +98,57 @@ namespace ks
 
 	MediaTime FImagePlayer::getCurrentTime() const
 	{
-		std::lock_guard<std::mutex> lock(gMutex);
-		return currentTime.convertScale(timeScale);
+		std::lock_guard<std::mutex> lock(currentTimeMutex);
+		return currentTime;
 	}
 
 	const PixelBuffer * FImagePlayer::getPixelBuffer() const
 	{
-		//std::lock_guard<std::mutex> gMutexLock(gMutex);
-
+		//bool isPause = false;
+		//{
+		//	std::lock_guard<std::mutex> lock(isPauseMutex);
+		//	isPause = this->isPause;
+		//}
+		//if (isPause && cachePixelBuffer)
+		//{
+		//	return cachePixelBuffer;
+		//}
+		std::optional<AsyncImageCompositionRequest> request = std::nullopt;
 		PixelBuffer* pixelBuffer = nullptr;
-
-		auto request = getCompositionRequest();
-		if (request.getPixelBuffer)
 		{
-			pixelBuffer = request.getPixelBuffer();
+			std::lock_guard<std::mutex> lock(requestMutex);
+			request = this->request;
+			if (request)
+			{
+				assert(request->getPixelBuffer);
+				pixelBuffer = request->getPixelBuffer();
+			}
+		}
+		if (pixelBuffer)
+		{
+			cachePixelBuffer = pixelBuffer;
+		}
+		else
+		{
+			pixelBuffer = cachePixelBuffer;
 		}
 
-		flushRequest(request);
+		{
+			std::lock_guard<std::mutex> lock(isWaitingRenderFinishMutex);
+			if (isWaitingRenderFinish)
+			{
+				isWaitingRenderFinish = false;
+				waitingRenderFinishSemaphore->signal();
+			}
+		}
 
 		return pixelBuffer;
+	}
+
+	void FImagePlayer::setPipeline(ImageCompositionPipeline * pipeline)
+	{
+		std::lock_guard<std::mutex> lock(pipelineMutex);
+		this->pipeline = pipeline;
 	}
 
 	void FImagePlayer::openDecodeImageThread()
@@ -138,152 +158,130 @@ namespace ks
 
 		std::thread([this, fps]()
 		{
-
 			MediaTime compositionTime = MediaTime::zero;
 			while (true)
 			{
-				const MediaTime currentTime = round(getCurrentTime(), fps);
-				spdlog::info(currentTime.seconds());
-				bool isTracing = false;
-				bool condition0 = false;
-				bool condition1 = false;
-
-				requestsMutex.lock();
-				if (requests.empty() == false)
+				MediaTime currentTime = MediaTime::zero;
+				MediaTime currentVideoDuration = MediaTime::zero;
+				ImageCompositionPipeline* pipeline = nullptr;
 				{
-					const FAsyncImageCompositionRequest frontRequest = requests.front();
-					condition0 = currentTime < frontRequest.compositionTime;
-					condition1 = frontRequest.compositionTime + MediaTime(fps.seconds() * (double)cacheSize, timeScale) < currentTime;
-					isTracing = condition0 || condition1;
+					std::lock_guard<std::mutex> lock(currentTimeMutex);
+					currentTime = this->currentTime;
 				}
-				else
 				{
-					if (currentTime < compositionTime)
+					std::lock_guard<std::mutex> lock(videoDurationMutex);
+					currentVideoDuration = videoDuration;
+				}
+				{
+					std::lock_guard<std::mutex> lock(pipelineMutex);
+					pipeline = this->pipeline;
+				}
+				bool isTracing = false;
+				bool isRequestsEmpty = false;
+				bool isLargeThanCacheSize = false;
+				std::optional<AsyncImageCompositionRequest> frontRequest = std::nullopt;
+				{
+					std::lock_guard<std::mutex> lock(requestsMutex);
+					isRequestsEmpty = requests.empty();
+					isLargeThanCacheSize = requests.size() >= cacheSize;
+					if (isRequestsEmpty == false)
 					{
-						isTracing = true;
+						frontRequest = requests.front();
 					}
 				}
-				requestsMutex.unlock();
+
+				if (frontRequest)
+				{
+					const MediaTimeRange timeRange(frontRequest->compositionTime, 
+						frontRequest->compositionTime + MediaTime(fps.seconds() * (double)cacheSize, timeScale));
+					isTracing = timeRange.containsTime(currentTime) == false;
+				}
+				else if (currentTime < compositionTime)
+				{
+					isTracing = true;
+				}
 
 				if (isTracing)
 				{
-					compositionTime = currentTime;
-					requestsMutex.lock();
+					compositionTime = round(currentTime, fps);
+					std::lock_guard<std::mutex> lock(requestsMutex);
 					requests.clear();
-					requestsMutex.unlock();
-
+					std::lock_guard<std::mutex> mutexLock(requestMutex);
+					this->request = std::nullopt;
 					for (IImageTrack * imageTrack : videoDescription->imageTracks)
 					{
 						imageTrack->onSeeking(compositionTime);
 					}
-
-					//FVideoInstruction videoInstuction;
-					//if (videoDescription->videoInstuction(compositionTime, videoInstuction))
-					//{
-					//	for (IImageTrack *imageTrack : videoInstuction.imageTracks)
-					//	{
-					//		imageTrack->onSeeking(compositionTime);
-					//	}
-					//}
 				}
-				else
+				std::optional<AsyncImageCompositionRequest> nextRequest = getNextRequest(compositionTime);
+				if (nextRequest && pipeline)
 				{
-					requestsMutex.lock();
-					const int requestsSize = requests.size();
-					requestsMutex.unlock();
-					if (requestsSize >= cacheSize)
+					std::lock_guard<std::mutex> lock(requestsMutex);
+					pipeline->composition(*nextRequest, [this]()
 					{
-						setIsDecodeImageThreadWaiting(true);
-						semaphore->wait();
-						continue;
-					}
-				}
-
-				FVideoInstruction videoInstuction;
-				FAsyncImageCompositionRequest request;
-				request.compositionTime = compositionTime;
-				request.videoRenderContext = &videoRenderContext;
-				if (videoDescription->videoInstuction(compositionTime, videoInstuction))
-				{
-					request.instruction = videoInstuction;
-
-					for (IImageTrack *imageTrack : videoInstuction.imageTracks)
-					{
-						const PixelBuffer *sourceFrame = imageTrack->sourceFrame(compositionTime, videoRenderContext);
-						request.sourceFrames[imageTrack->trackID] = sourceFrame;
-						//imageTrack->flush(compositionTime);
-					}
-				}
-				else
-				{
-					continue; // TODO:
-				}
-				if (pipeline)
-				{
-					pipeline->composition(request, [this, isTracing]()
-					{
-						PixelBuffer *newPixelBuffer = pixelBufferPool->pixelBuffer();
-						//while (newPixelBuffer == getPixelBuffer())
-						//{
-						//	newPixelBuffer = pixelBufferPool->pixelBuffer();
-						//}
-						return newPixelBuffer;
+						return pixelBufferPool->pixelBuffer();
 					});
+					requests.emplace_back(*nextRequest);
 				}
-
 				if (isTracing)
 				{
-					//this->setPixelBuffer(request.pixelBuffer);
-					this->setCompositionRequest(request);
+					{
+						std::lock_guard<std::mutex> mutexLock(requestMutex);
+						this->request = nextRequest;
+					}
+					{
+						std::lock_guard<std::mutex> lock(isWaitingRenderFinishMutex);
+						isWaitingRenderFinish = true;
+					}
+					waitingRenderFinishSemaphore->wait();
 				}
-
-				requestsMutex.lock();
-				requests.push_back(request);
-				requestsMutex.unlock();
-
 				compositionTime = MediaTime(compositionTime.timeValue() + fps.timeValue(), timeScale);
-				compositionTime = MediaTimeRange(MediaTime::zero, getVideoDuration()).clamp(compositionTime);
-
-				if (compositionTime >= getVideoDuration())
+				compositionTime = MediaTimeRange(MediaTime::zero, currentVideoDuration).clamp(compositionTime);
+				compositionTime = round(compositionTime, fps);
+				if (compositionTime >= currentVideoDuration || isLargeThanCacheSize)
 				{
-					setIsDecodeImageThreadWaiting(true);
+					{
+						std::lock_guard<std::mutex> lock(isDecodeImageThreadWaitingMutex);
+						this->isDecodeImageThreadWaiting = true;
+					}
 					semaphore->wait();
 				}
 			}
 		}).detach();
 	}
 
-	void FImagePlayer::setIsDecodeImageThreadWaiting(const bool flag)
+	std::optional<AsyncImageCompositionRequest> FImagePlayer::getNextRequest(const MediaTime & compositionTime)
 	{
-		std::lock_guard<std::mutex> lock(isDecodeImageThreadWaitingMutex);
-		isDecodeImageThreadWaiting = flag;
+		VideoInstruction videoInstuction;
+		if (videoDescription->videoInstuction(compositionTime, videoInstuction))
+		{
+			AsyncImageCompositionRequest request;
+			request.compositionTime = compositionTime;
+			request.videoRenderContext = &videoRenderContext;
+			request.instruction = videoInstuction;
+			for (IImageTrack *imageTrack : videoInstuction.imageTracks)
+			{
+				const PixelBuffer *sourceFrame = imageTrack->sourceFrame(compositionTime, videoRenderContext);
+				request.sourceFrames[imageTrack->trackID] = sourceFrame;
+			}
+			return request;
+		}
+		else
+		{
+			return std::nullopt;
+		}
 	}
 
-	bool FImagePlayer::getIsDecodeImageThreadWaiting() const
+	MediaTime FImagePlayer::round(const MediaTime & time, const MediaTime & fps) const
 	{
-		std::lock_guard<std::mutex> lock(isDecodeImageThreadWaitingMutex);
-		return isDecodeImageThreadWaiting;
+		assert(fps.seconds() > 0.0);
+		//assert(time.timeScale() == fps.timeScale());
+		int num = (int)floor((time.convertScale(fps.timeScale()) / fps).seconds());
+		int timeValue = num * fps.timeValue();
+		return MediaTime(timeValue, timeScale);
 	}
 
-	void FImagePlayer::setCurrentTime(const MediaTime& time)
-	{
-		std::lock_guard<std::mutex> lock(gMutex);
-		currentTime = time.convertScale(timeScale);
-	}
-
-	void FImagePlayer::setVideoDuration(const MediaTime& time)
-	{
-		std::lock_guard<std::mutex> lock(gMutex);
-		videoDuration = time.convertScale(timeScale);
-	}
-
-	MediaTime FImagePlayer::getVideoDuration() const
-	{
-		std::lock_guard<std::mutex> lock(gMutex);
-		return videoDuration.convertScale(timeScale);
-	}
-
-	void FImagePlayer::flushRequest(const FAsyncImageCompositionRequest & request) const
+	void FImagePlayer::flushRequest(const AsyncImageCompositionRequest & request) const
 	{
 		for (IImageTrack *imageTrack : request.instruction.imageTracks)
 		{
@@ -291,25 +289,7 @@ namespace ks
 		}
 	}
 
-	void FImagePlayer::setCompositionRequest(FAsyncImageCompositionRequest request)
-	{
-		std::lock_guard<std::mutex> lock(requestMutex);
-		this->request = request;
-	}
-
-	FAsyncImageCompositionRequest FImagePlayer::getCompositionRequest() const noexcept
-	{
-		std::lock_guard<std::mutex> lock(requestMutex);
-		return request;
-	}
-
-	//void FImagePlayer::setPixelBuffer(PixelBuffer * _pixelBuffer)
-	//{
-	//	std::lock_guard<std::mutex> lock(gMutex);
-	//	pixelBuffer = _pixelBuffer;
-	//}
-
-	void FImagePlayer::resetPixelBufferPool(const FVideoRenderContext & videoRenderContext)
+	void FImagePlayer::resetPixelBufferPool(const VideoRenderContext & videoRenderContext)
 	{
 		if (pixelBufferPool)
 		{
@@ -326,74 +306,84 @@ namespace ks
 		{
 			return;
 		}
+		isDecodeImageThreadOpen = true;
 		openDecodeImageThread();
 	}
 
-	MediaTime FImagePlayer::round(const MediaTime& time, const MediaTime & fps) const
+	void FImagePlayer::timerTick(const ks::SimpleTimer& timer, const MediaTime& fps)
 	{
-		assert(fps.seconds() > 0.0);
-		assert(time.timeScale() == fps.timeScale());
-		int num = (int)floor((time / fps).seconds());
-		int timeValue = num * fps.timeValue();
-		return MediaTime(timeValue, timeScale);
-	}
-
-	void FImagePlayer::timerTick(const MediaTime& currentTime, const MediaTime& fps)
-	{
-		std::lock_guard<std::mutex> lock(requestsMutex);
-
-		requests.erase(std::remove_if(requests.begin(), requests.end(), [this, fps, currentTime](const FAsyncImageCompositionRequest& request)
+		bool isPause = false;
 		{
-			bool flag = request.compositionTime < round(currentTime, fps);
-			//if (flag)
-			//{
-			//	flushRequest(request);
-			//}
-			return flag;
-		}), requests.end());
-
-		if (requests.empty() == false)
+			std::lock_guard<std::mutex> lock(isPauseMutex);
+			isPause = this->isPause;
+		}	
+		MediaTime currentTime = MediaTime::zero;
 		{
-			for (auto request = requests.rbegin(); request != requests.rend(); ++request)
+			std::lock_guard<std::mutex> lock(currentTimeMutex);
+			currentTime = this->currentTime;
+		}
+		bool isDecodeImageThreadWaiting = false;
+		{
+			std::lock_guard<std::mutex> lock(isDecodeImageThreadWaitingMutex);
+			isDecodeImageThreadWaiting = this->isDecodeImageThreadWaiting;
+		}
+		bool isRequestsEmpty = false;
+		bool isLessThanCacheSize = false;
+		bool isTracing = false;
+		{
+			std::lock_guard<std::mutex> lock0(requestsMutex);
+			std::lock_guard<std::mutex> lock1(requestMutex);
+			const std::vector<ks::AsyncImageCompositionRequest> cpRequests = requests;
+			requests.clear();
+			const std::optional<ks::AsyncImageCompositionRequest> lastRequest = this->request;
+			for (auto requestIter = cpRequests.rbegin(); requestIter != cpRequests.rend(); ++requestIter)
 			{
-				if (request->compositionTime <= currentTime)
+				if (requestIter->compositionTime >= currentTime - fps)
 				{
-					//setPixelBuffer(request->pixelBuffer);
-					this->setCompositionRequest(*request);
-					break;
+					requests.insert(requests.begin(), *requestIter);
+					this->request = *requestIter;
 				}
 			}
+			if (lastRequest && this->request && lastRequest->compositionTime != this->request->compositionTime)
+			{
+				flushRequest(*lastRequest);
+			}
+			isRequestsEmpty = requests.empty();
+			isLessThanCacheSize = requests.size() < cacheSize;
+
+			if (isRequestsEmpty == false)
+			{
+				const MediaTimeRange timeRange(requests.front().compositionTime,
+					requests.front().compositionTime + MediaTime(fps.seconds() * (double)cacheSize, timeScale));
+				isTracing = timeRange.containsTime(currentTime) == false;
+			}
 		}
 
-		if (requests.empty() == false)
+		const bool isNeedToWakeup = (isRequestsEmpty || isLessThanCacheSize || isTracing) && isDecodeImageThreadWaiting;
+		if (isNeedToWakeup)
 		{
-			const FAsyncImageCompositionRequest frontRequest = requests.front();
-
-			if (getIsDecodeImageThreadWaiting() && currentTime < frontRequest.compositionTime)
 			{
-				//for (size_t i = 0; i < requests.size(); i++)
-				//{
-				//	flushRequest(requests[i]);
-				//}
-				requests.clear();
-				setIsDecodeImageThreadWaiting(false);
-				semaphore->signal();
+				std::lock_guard<std::mutex> lock(isDecodeImageThreadWaitingMutex);
+				this->isDecodeImageThreadWaiting = false;
 			}
-			else if (getIsDecodeImageThreadWaiting() && requests.size() < cacheSize)
-			{
-				setIsDecodeImageThreadWaiting(false);
-				semaphore->signal();
-			}
+			semaphore->signal();
 		}
-		else
+
+		if (isPause == false)
 		{
-			if (getIsDecodeImageThreadWaiting())
+			MediaTime videoDuration;
 			{
-				setIsDecodeImageThreadWaiting(false);
-				semaphore->signal();
+				std::lock_guard<std::mutex> lock(videoDurationMutex);
+				videoDuration = this->videoDuration;
+			}
+			const double seconds = (double)timer.getDuration() / 1000.0;
+			{
+				std::lock_guard<std::mutex> lock(currentTimeMutex);
+				MediaTime newTime = this->currentTime + MediaTime(seconds, 1000000);
+				newTime = MediaTimeRange(MediaTime::zero, videoDuration).clamp(newTime);
+				this->currentTime = newTime;
 			}
 		}
-
 	}
 
 	void FImagePlayer::openRenderImageThread()

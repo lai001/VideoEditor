@@ -19,6 +19,7 @@
 #define VideoEditor_ImagePlayer_hpp
 
 #include <vector>
+#include <optional>
 #include <string>
 #include <thread>
 #include <mutex>
@@ -35,68 +36,52 @@ namespace ks
 	public:
 		FImagePlayer();
 		~FImagePlayer();
-
-	public:
 		void play();
 		void pause();
 		void seek(const MediaTime& time);
-		void replace(const FVideoDescription* videoDescription);
+		void replace(const VideoDescription* videoDescription);
 		MediaTime getCurrentTime() const;
 		const PixelBuffer* getPixelBuffer() const;
-
-	public:
-		FImageCompositionPipeline* pipeline = nullptr;
+		void setPipeline(ImageCompositionPipeline* pipeline);
 
 	private:
-		std::vector<FAsyncImageCompositionRequest> requests;
-		mutable std::mutex requestsMutex;
-		ks::IRenderEngine* renderEngine = nullptr;
-
-	private:
-		PixelBufferPool* pixelBufferPool = nullptr;
-		//PixelBuffer* pixelBuffer = nullptr;
+		mutable std::mutex currentTimeMutex;
+		mutable std::mutex isPauseMutex;
 		mutable std::mutex requestMutex;
-		FAsyncImageCompositionRequest request;
-		void flushRequest(const FAsyncImageCompositionRequest& request) const;
-		void setCompositionRequest(FAsyncImageCompositionRequest request);
-		FAsyncImageCompositionRequest getCompositionRequest() const noexcept;
-		//void setPixelBuffer(PixelBuffer* pixelBuffer);
-		void resetPixelBufferPool(const FVideoRenderContext& videoRenderContext);
+		mutable std::mutex requestsMutex;
+		mutable std::mutex pipelineMutex;
+		mutable std::mutex videoDurationMutex;
+		mutable std::mutex isDecodeImageThreadWaitingMutex;
+		mutable std::mutex isWaitingRenderFinishMutex;
 
-	private:
+		mutable ks::PixelBuffer* cachePixelBuffer = nullptr;
+		ImageCompositionPipeline* pipeline = nullptr;
+		std::vector<AsyncImageCompositionRequest> requests;
+		ks::IRenderEngine* renderEngine = nullptr;
+		PixelBufferPool* pixelBufferPool = nullptr;
 		MediaTime currentTime = MediaTime::zero;
 		MediaTime videoDuration = MediaTime::zero;
-		void setCurrentTime(const MediaTime& time);
-		void setVideoDuration(const MediaTime& time);
-		MediaTime getVideoDuration() const;
-
-	private:
 		const int timeScale = 600;
 		const unsigned int cacheSize = 30;
-		mutable std::mutex gMutex;
-
-		const FVideoDescription* videoDescription = nullptr;
-		FVideoRenderContext videoRenderContext;
+		const VideoDescription* videoDescription = nullptr;
+		VideoRenderContext videoRenderContext;
 		SimpleTimer* timer = nullptr;
 		Semaphore* semaphore = nullptr;
-		MediaTime round(const MediaTime& time, const MediaTime& fps) const;
-		void timerTick(const MediaTime& currentTime, const MediaTime& fps);
-
-	private:
-		void openRenderImageThread();
-
-	private:
+		Semaphore* waitingRenderFinishSemaphore = nullptr;
+		std::optional<AsyncImageCompositionRequest> request = std::nullopt;
 		bool isPause = true;
-		mutable std::mutex isPauseMutex;
-
-	private:
 		bool isDecodeImageThreadOpen = false;
 		bool isDecodeImageThreadWaiting = false;
-		mutable std::mutex isDecodeImageThreadWaitingMutex;
+		mutable bool isWaitingRenderFinish = false;
+
+		void flushRequest(const AsyncImageCompositionRequest& request) const;
+		void resetPixelBufferPool(const VideoRenderContext& videoRenderContext);
+		void timerTick(const ks::SimpleTimer& timer, const MediaTime& fps);
+		void openRenderImageThread();
 		void openDecodeImageThreadIfNeed();
 		void openDecodeImageThread();
-		void setIsDecodeImageThreadWaiting(const bool flag);
-		bool getIsDecodeImageThreadWaiting() const;
+		std::optional<AsyncImageCompositionRequest> getNextRequest(const MediaTime& compositionTime);
+		MediaTime round(const MediaTime& time, const MediaTime & fps) const;
 	};
 }
 

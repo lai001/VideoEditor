@@ -26,7 +26,7 @@
 
 namespace ks
 {
-	class FExportSession
+	class ExportSession
 	{
 	public:
 		enum EncodeType
@@ -36,14 +36,14 @@ namespace ks
 		};
 
 	public:
-		FExportSession(const FVideoDescription& videoDescription, FImageCompositionPipeline& imageCompositionPipeline);
-		~FExportSession();
+		ExportSession(const VideoDescription& videoDescription, ImageCompositionPipeline& imageCompositionPipeline);
+		~ExportSession();
 		void start(const std::string& filename,
-			std::function<void(const FExportSession::EncodeType& type, const MediaTime& time)> progressCallback);
+			std::function<void(const ExportSession::EncodeType& type, const MediaTime& time)> progressCallback);
 
 	private:
-		const FVideoDescription *videoDescription = nullptr;
-		FImageCompositionPipeline *imageCompositionPipeline = nullptr;
+		const VideoDescription *videoDescription = nullptr;
+		ImageCompositionPipeline *imageCompositionPipeline = nullptr;
 	};
 }
 

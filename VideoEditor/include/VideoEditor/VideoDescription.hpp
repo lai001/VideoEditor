@@ -30,19 +30,19 @@
 
 namespace ks
 {
-	class FVideoDescription
+	class VideoDescription
 	{
 	public:
-		FVideoDescription();
-		~FVideoDescription();
+		VideoDescription();
+		~VideoDescription();
 
-		FRenderContext renderContext;
+		RenderContext renderContext;
 
 		void prepare();
 
 		static std::vector<MediaTimeRange> instructionTimeRanges(std::vector<MediaTimeRange> timeRanges);
 
-		bool videoInstuction(const MediaTime time, FVideoInstruction& outVideoInstruction) const;
+		bool videoInstuction(const MediaTime time, VideoInstruction& outVideoInstruction) const;
 
 		std::vector<IImageTrack *> imageTracks;
 		std::vector<FAudioTrack *> audioTracks;
@@ -50,7 +50,7 @@ namespace ks
 		MediaTime duration() const;
 
 	protected:
-		std::vector<FVideoInstruction> videoInstructions;
+		std::vector<VideoInstruction> videoInstructions;
 
 	private:
 		void removeAllVideoInstuctions();

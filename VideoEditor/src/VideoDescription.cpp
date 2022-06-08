@@ -21,7 +21,7 @@
 
 namespace ks
 {
-	FVideoDescription::FVideoDescription()
+	VideoDescription::VideoDescription()
 	{
 		AudioFormat format;
 		format.sampleRate = 44100;
@@ -32,12 +32,12 @@ namespace ks
 		renderContext.audioRenderContext.audioFormat = format;
 	}
 
-	FVideoDescription::~FVideoDescription()
+	VideoDescription::~VideoDescription()
 	{
 
 	}
 
-	void FVideoDescription::prepare()
+	void VideoDescription::prepare()
 	{
 		_duration = MediaTime::zero;
 		std::vector<MediaTimeRange> timeRanges;
@@ -51,13 +51,13 @@ namespace ks
 			audioTracks[i]->trackID = i;
 			timeRanges.push_back(audioTracks[i]->timeMapping.target);
 		}
-		std::vector<MediaTimeRange> instructionTimeRanges = FVideoDescription::instructionTimeRanges(timeRanges);
+		std::vector<MediaTimeRange> instructionTimeRanges = VideoDescription::instructionTimeRanges(timeRanges);
 
 		removeAllVideoInstuctions();
 
 		for (MediaTimeRange timeRange : instructionTimeRanges)
 		{
-			FVideoInstruction videoInstruction;
+			VideoInstruction videoInstruction;
 			videoInstruction.timeRange = timeRange;
 
 			for (IImageTrack *imageTrack : imageTracks)
@@ -83,7 +83,7 @@ namespace ks
 		}
 	}
 
-	std::vector<MediaTimeRange> FVideoDescription::instructionTimeRanges(std::vector<MediaTimeRange> timeRanges)
+	std::vector<MediaTimeRange> VideoDescription::instructionTimeRanges(std::vector<MediaTimeRange> timeRanges)
 	{
 		std::unordered_map<double, MediaTime> keyTimes;
 
@@ -127,9 +127,9 @@ namespace ks
 		return _timeRanges;
 	}
 
-	bool FVideoDescription::videoInstuction(const MediaTime time, FVideoInstruction& outVideoInstruction) const
+	bool VideoDescription::videoInstuction(const MediaTime time, VideoInstruction& outVideoInstruction) const
 	{
-		for (FVideoInstruction videoInstruction : videoInstructions)
+		for (VideoInstruction videoInstruction : videoInstructions)
 		{
 			if (videoInstruction.timeRange.containsTime(time))
 			{
@@ -140,12 +140,12 @@ namespace ks
 		return false;
 	}
 
-	MediaTime FVideoDescription::duration() const
+	MediaTime VideoDescription::duration() const
 	{
 		return _duration;
 	}
 
-	void FVideoDescription::removeAllVideoInstuctions()
+	void VideoDescription::removeAllVideoInstuctions()
 	{
 		videoInstructions.clear();
 	}

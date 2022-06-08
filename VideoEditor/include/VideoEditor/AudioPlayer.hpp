@@ -31,23 +31,23 @@
 
 namespace ks
 {
-	struct FAudioCompositionRequest
+	struct AudioCompositionRequest
 	{
 		MediaTimeRange compositionTimeRange = MediaTimeRange::zero;
 		AudioPCMBuffer* buffer = nullptr;
 	};
 
-	class FAudioPlayer : public boost::noncopyable
+	class AudioPlayer : public noncopyable
 	{
 	public:
-		FAudioPlayer(const int samples = 1024);
-		~FAudioPlayer();
+		AudioPlayer(const int samples = 1024);
+		~AudioPlayer();
 
 	public:
 		void play();
 		void pause();
 		void seek(const MediaTime& time);
-		void replace(const FVideoDescription* videoDescription);
+		void replace(const VideoDescription* videoDescription);
 
 		MediaTime getCurrentTime() const;
 		void getPCMBuffer(std::function<void(const AudioPCMBuffer*)> retrieval);
@@ -62,7 +62,7 @@ namespace ks
 		MediaTime getAudioDuration() const;
 
 	private:
-		std::vector<FAudioCompositionRequest> buffers;
+		std::vector<AudioCompositionRequest> buffers;
 		mutable std::mutex buffersMutex;
 		void mix(AudioPCMBuffer& outBuffer, std::vector<AudioPCMBuffer*> buffers);
 
@@ -70,8 +70,8 @@ namespace ks
 		const int samples = 1024;
 		const unsigned int cacheSize = 160;
 
-		const FVideoDescription* videoDescription = nullptr;
-		FAudioRenderContext audioRenderContext;
+		const VideoDescription* videoDescription = nullptr;
+		AudioRenderContext audioRenderContext;
 		SimpleTimer* timer = nullptr;
 		Semaphore* semaphore = nullptr;
 		MediaTime round(const MediaTime& time, const MediaTime& duration) const;

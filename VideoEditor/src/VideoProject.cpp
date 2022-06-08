@@ -24,12 +24,12 @@
 
 namespace ks
 {
-	FVideoProject::FVideoProject(const std::string& projectFilePath)
+	VideoProject::VideoProject(const std::string& projectFilePath)
 		: projectFilePath(projectFilePath)
 	{
 		projectDir = getFolder(projectFilePath);
 
-		videoDescription = new FVideoDescription();
+		videoDescription = new VideoDescription();
 
 		const std::string rawString = ks::File::read(projectFilePath, nullptr);
 		const Json j3 = Json::parse(rawString);
@@ -45,12 +45,12 @@ namespace ks
 		loadAudioRenderContext(audio_render_context, videoDescription->renderContext.audioRenderContext);
 	}
 
-	FVideoProject::~FVideoProject()
+	VideoProject::~VideoProject()
 	{
 		clean();
 	}
 
-	void FVideoProject::clean()
+	void VideoProject::clean()
 	{
 		for (IImageTrack *imageTrack : videoDescription->imageTracks)
 		{
@@ -66,7 +66,7 @@ namespace ks
 		delete videoDescription;
 	}
 
-	bool FVideoProject::loadVideoRenderContext(const Json & json, FVideoRenderContext& context)
+	bool VideoProject::loadVideoRenderContext(const Json & json, VideoRenderContext& context)
 	{
 		assert(json.at("render_size_width").is_null() == false);
 		assert(json.at("render_size_height").is_null() == false);
@@ -81,7 +81,7 @@ namespace ks
 		return true;
 	}
 
-	bool FVideoProject::loadAudioRenderContext(const Json & json, FAudioRenderContext& context)
+	bool VideoProject::loadAudioRenderContext(const Json & json, AudioRenderContext& context)
 	{
 		std::unordered_map<std::string, AudioSampleType> table;
 		//table["uint16"] = AudioSampleType::uint16;
@@ -143,7 +143,7 @@ namespace ks
 		return true;
 	}
 
-	bool FVideoProject::loadVideoTracks(const Json & json)
+	bool VideoProject::loadVideoTracks(const Json & json)
 	{
 		for (size_t i = 0; i < json.size(); i++)
 		{
@@ -154,7 +154,7 @@ namespace ks
 			const Json rectJson = videoTrackJson.at("rect");
 			const Rect rect = converRect(rectJson);
 			const std::string filepath = projectDir + "/" + path;
-			FVideoTrack *videoTrack = new FVideoTrack();
+			VideoTrack *videoTrack = new VideoTrack();
 			videoTrack->rect = rect;
 			videoTrack->filePath = filepath;
 			videoTrack->timeMapping = MediaTimeMapping(converTimeRange(source_time_range, 600), converTimeRange(target_time_range, 600));
@@ -163,7 +163,7 @@ namespace ks
 		return true;
 	}
 
-	bool FVideoProject::loadAudioTracks(const Json & json)
+	bool VideoProject::loadAudioTracks(const Json & json)
 	{
 		for (size_t i = 0; i < json.size(); i++)
 		{
@@ -180,7 +180,7 @@ namespace ks
 		return true;
 	}
 
-	MediaTimeRange FVideoProject::converTimeRange(const Json & json, int timeScale)
+	MediaTimeRange VideoProject::converTimeRange(const Json & json, int timeScale)
 	{
 		assert(json.at("start").is_null() == false);
 		assert(json.at("end").is_null() == false);
@@ -189,7 +189,7 @@ namespace ks
 		return MediaTimeRange(MediaTime(start, timeScale), MediaTime(end, timeScale));
 	}
 
-	Rect FVideoProject::converRect(const Json & json)
+	Rect VideoProject::converRect(const Json & json)
 	{
 		assert(json.at("x").is_null() == false);
 		assert(json.at("y").is_null() == false);
@@ -202,36 +202,36 @@ namespace ks
 		return Rect(x, y, width, height);
 	}
 
-	const FVideoDescription *FVideoProject::getVideoDescription() const
+	const VideoDescription *VideoProject::getVideoDescription() const
 	{
 		return videoDescription;
 	}
 
-	const std::vector<IImageTrack *> FVideoProject::getImageTracks() const
+	const std::vector<IImageTrack *> VideoProject::getImageTracks() const
 	{
 		return videoDescription->imageTracks;
 	}
 
-	const std::vector<FAudioTrack *> FVideoProject::getAudioTracks() const
+	const std::vector<FAudioTrack *> VideoProject::getAudioTracks() const
 	{
 		return videoDescription->audioTracks;
 	}
 
-	IImageTrack *FVideoProject::insertNewImageTrack()
+	IImageTrack *VideoProject::insertNewImageTrack()
 	{
-		IImageTrack *videoTrack = new FVideoTrack();
+		IImageTrack *videoTrack = new VideoTrack();
 		videoDescription->imageTracks.push_back(videoTrack);
 		return videoTrack;
 	}
 
-	FAudioTrack *FVideoProject::insertNewAudioTrack()
+	FAudioTrack *VideoProject::insertNewAudioTrack()
 	{
 		FAudioTrack *audioTrack = new FAudioTrack();
 		videoDescription->audioTracks.push_back(audioTrack);
 		return audioTrack;
 	}
 
-	bool FVideoProject::prepare()
+	bool VideoProject::prepare()
 	{
 		videoDescription->prepare();
 		return true;

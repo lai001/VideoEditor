@@ -36,12 +36,12 @@ extern "C"
 #include "backends/imgui_impl_win32.h"
 #include "Platform/WindowsPlatform.hpp"
 
-ks::FVideoProject* videoProject = nullptr;
+ks::VideoProject* videoProject = nullptr;
 ks::FImagePlayer* imagePlayer = nullptr;
-ks::FImageCompositionPipeline* imageCompositionPipeline = nullptr;
+ks::ImageCompositionPipeline* imageCompositionPipeline = nullptr;
 float currentTime = 0;
 bool isPause = false;
-ks::FAudioPlayer* audioPlayer = nullptr;
+ks::AudioPlayer* audioPlayer = nullptr;
 static std::unique_ptr<WindowsPlatform> windowsPlatformPtr;
 unsigned int currentWindowWidth = 1280;
 unsigned int currentWindowHeight = 720;
@@ -280,21 +280,20 @@ int main(int argc, char *argv[])
 		ImGuiDestroy();
 	};
 
-	imageCompositionPipeline = new ks::FImageCompositionPipeline();
-	videoProject = new ks::FVideoProject(projectFilePath);
+	imageCompositionPipeline = new ks::ImageCompositionPipeline();
+	videoProject = new ks::VideoProject(projectFilePath);
 	assert(videoProject->getVideoDescription()->renderContext.audioRenderContext.audioFormat.isNonInterleaved() == false);
 	bool ret = videoProject->prepare();
 	imagePlayer = new ks::FImagePlayer();
-	imagePlayer->pipeline = imageCompositionPipeline;
+	imagePlayer->setPipeline(imageCompositionPipeline);
 	imagePlayer->replace(videoProject->getVideoDescription());
-	audioPlayer = new ks::FAudioPlayer(audioSamples);
+	audioPlayer = new ks::AudioPlayer(audioSamples);
 	audioPlayer->replace(videoProject->getVideoDescription());
 
 	while (windowsPlatformPtr->shouldClose() == false)
 	{
 		windowsPlatformPtr->clearColor();
 		currentTime = imagePlayer->getCurrentTime().seconds();
-
 		if (const ks::PixelBuffer * pixelBuffer = imagePlayer->getPixelBuffer())
 		{
 			drawResult(pixelBuffer);

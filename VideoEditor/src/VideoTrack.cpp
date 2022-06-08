@@ -21,11 +21,11 @@
 
 namespace ks
 {
-	FVideoTrack::FVideoTrack()
+	VideoTrack::VideoTrack()
 	{
 	}
 
-	FVideoTrack::~FVideoTrack()
+	VideoTrack::~VideoTrack()
 	{
 		if (decoder)
 		{
@@ -34,7 +34,7 @@ namespace ks
 		flush();
 	}
 
-	const PixelBuffer *FVideoTrack::sourceFrame(const MediaTime & compositionTime, const FVideoRenderContext & renderContext)
+	const PixelBuffer *VideoTrack::sourceFrame(const MediaTime & compositionTime, const VideoRenderContext & renderContext)
 	{
 		std::lock_guard<std::mutex> lock(decoderMutex);
 
@@ -50,7 +50,7 @@ namespace ks
 			PixelBuffer* pixelBuffer = decoder->newFrame(pts);
 			if (pixelBuffer)
 			{
-				FSourceFrame sourceFrame;
+				SourceFrame sourceFrame;
 				sourceFrame.displayTime = getTargetTime(timeMapping, pts);
 				sourceFrame.sourceFrame = pixelBuffer;
 				videoFrameQueue.push_back(sourceFrame);
@@ -73,7 +73,7 @@ namespace ks
 			}
 			else
 			{
-				FSourceFrame back = videoFrameQueue.back();
+				SourceFrame back = videoFrameQueue.back();
 				if (back.displayTime >= compositionTime)
 				{
 					break;
@@ -94,19 +94,19 @@ namespace ks
 		}
 		else
 		{
-			FSourceFrame back = videoFrameQueue.back();
+			SourceFrame back = videoFrameQueue.back();
 			return back.sourceFrame;
 		}
 	}
 
-	const PixelBuffer * FVideoTrack::compositionImage(const PixelBuffer & sourceFrame, 
+	const PixelBuffer * VideoTrack::compositionImage(const PixelBuffer & sourceFrame, 
 		const MediaTime & compositionTime, 
-		const FVideoRenderContext & renderContext)
+		const VideoRenderContext & renderContext)
 	{
 		return &sourceFrame;
 	}
 
-	void FVideoTrack::prepare(const FVideoRenderContext & renderContext)
+	void VideoTrack::prepare(const VideoRenderContext & renderContext)
 	{
 		if (decoder)
 		{
@@ -118,7 +118,7 @@ namespace ks
 		onSeeking(timeMapping.source.start);
 	}
 
-	void FVideoTrack::onSeeking(const MediaTime & compositionTime)
+	void VideoTrack::onSeeking(const MediaTime & compositionTime)
 	{
 		flush();
 		const MediaTime seekTime = getSourceTime(timeMapping, compositionTime);
@@ -130,11 +130,11 @@ namespace ks
 		}
 	}
 
-	void FVideoTrack::flush(const MediaTime & time)
+	void VideoTrack::flush(const MediaTime & time)
 	{
 		std::lock_guard<std::mutex> lock(decoderMutex);
 
-		videoFrameQueue.erase(std::remove_if(videoFrameQueue.begin(), videoFrameQueue.end(), [&](FSourceFrame videoFrame) {
+		videoFrameQueue.erase(std::remove_if(videoFrameQueue.begin(), videoFrameQueue.end(), [&](SourceFrame videoFrame) {
 			if (videoFrame.displayTime < time)
 			{
 				delete videoFrame.sourceFrame;
@@ -149,7 +149,7 @@ namespace ks
 			videoFrameQueue.end());
 	}
 
-	void FVideoTrack::flush()
+	void VideoTrack::flush()
 	{
 		std::lock_guard<std::mutex> lock(decoderMutex);
 

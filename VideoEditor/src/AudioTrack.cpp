@@ -37,7 +37,7 @@ namespace ks
 		flush();
 	}
 
-	void FAudioTrack::prepare(const FAudioRenderContext& renderContext)
+	void FAudioTrack::prepare(const AudioRenderContext& renderContext)
 	{
 		if (decoder)
 		{

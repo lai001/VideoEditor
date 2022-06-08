@@ -21,16 +21,16 @@
 
 namespace ks
 {
-	FImageCompositionPipeline::FImageCompositionPipeline()
+	ImageCompositionPipeline::ImageCompositionPipeline()
 	{
 	}
 
-	FImageCompositionPipeline::~FImageCompositionPipeline()
+	ImageCompositionPipeline::~ImageCompositionPipeline()
 	{
 
 	}
 
-	void FImageCompositionPipeline::composition(FAsyncImageCompositionRequest& request, std::function<PixelBuffer*()> getPixelBuffer)
+	void ImageCompositionPipeline::composition(AsyncImageCompositionRequest& request, std::function<PixelBuffer*()> getPixelBuffer)
 	{
 		request.getPixelBuffer = [request, getPixelBuffer]()
 		{

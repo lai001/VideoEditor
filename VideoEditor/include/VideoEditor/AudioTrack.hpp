@@ -44,7 +44,7 @@ namespace ks
 		std::string filePath;
 
 	public:
-		virtual void prepare(const FAudioRenderContext& renderContext);
+		virtual void prepare(const AudioRenderContext& renderContext);
 		virtual void flush();
 		virtual void flush(const MediaTime& time);
 		virtual void onSeeking(const MediaTime& time);

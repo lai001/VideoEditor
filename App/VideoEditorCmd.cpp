@@ -59,21 +59,21 @@ int main(int argc, char *argv[])
 		assert(ks::File::isReadable(projectFilePath));
 		assert(outputFilePath.length() > 0);
 
-		std::unique_ptr<ks::FVideoProject> videoProject = std::unique_ptr<ks::FVideoProject>(new ks::FVideoProject(projectFilePath));
+		std::unique_ptr<ks::VideoProject> videoProject = std::unique_ptr<ks::VideoProject>(new ks::VideoProject(projectFilePath));
 
 		bool ret = videoProject->prepare();
-		const ks::FVideoDescription *des = videoProject->getVideoDescription();
-		ks::FImageCompositionPipeline pipeline;
+		const ks::VideoDescription *des = videoProject->getVideoDescription();
+		ks::ImageCompositionPipeline pipeline;
 
-		ks::FExportSession session = ks::FExportSession(*des, pipeline);
+		ks::ExportSession session = ks::ExportSession(*des, pipeline);
 
-		session.start(outputFilePath, [](const ks::FExportSession::EncodeType& type, const ks::MediaTime& time)
+		session.start(outputFilePath, [](const ks::ExportSession::EncodeType& type, const ks::MediaTime& time)
 		{
-			if (type == ks::FExportSession::EncodeType::video)
+			if (type == ks::ExportSession::EncodeType::video)
 			{
 				spdlog::debug("encode video frame {}", time.seconds());
 			}
-			else if (type == ks::FExportSession::EncodeType::audio)
+			else if (type == ks::ExportSession::EncodeType::audio)
 			{
 				spdlog::debug("encode audio frame {}", time.seconds());
 			}
